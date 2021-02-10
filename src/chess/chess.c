@@ -40,8 +40,6 @@ ChessBoard init_chess(void){
 	o->b[CHESS_BOARD_POS(5,7)]=CHESS_PIECE_SET_COLOR(CHESS_PIECE_COLOR_WHITE)|CHESS_PIECE_SET_TYPE(CHESS_PIECE_TYPE_BISHOP)|CHESS_PIECE_SET_STATE(CHESS_PIECE_STATE_VISIBLE);
 	o->b[CHESS_BOARD_POS(6,7)]=CHESS_PIECE_SET_COLOR(CHESS_PIECE_COLOR_WHITE)|CHESS_PIECE_SET_TYPE(CHESS_PIECE_TYPE_KNIGHT)|CHESS_PIECE_SET_STATE(CHESS_PIECE_STATE_VISIBLE);
 	o->b[CHESS_BOARD_POS(7,7)]=CHESS_PIECE_SET_COLOR(CHESS_PIECE_COLOR_WHITE)|CHESS_PIECE_SET_TYPE(CHESS_PIECE_TYPE_ROOK)|CHESS_PIECE_SET_STATE(CHESS_PIECE_STATE_VISIBLE);
-	/*****************/
-	o->b[CHESS_BOARD_POS(0,2)]=CHESS_PIECE_SET_COLOR(CHESS_PIECE_COLOR_WHITE)|CHESS_PIECE_SET_TYPE(CHESS_PIECE_TYPE_PAWN)|CHESS_PIECE_SET_STATE(CHESS_PIECE_STATE_VISIBLE);
 	o->t=CHESS_PIECE_COLOR_WHITE;
 	o->ws=0;
 	o->bs=0;
@@ -59,6 +57,7 @@ PossibleMoves get_moves(ChessBoard b,uint8_t x,uint8_t y){
 	if (!CHESS_PIECE_EXISTS(f)){
 		return o;
 	}
+	uint8_t cl=CHESS_PIECE_GET_COLOR(f);
 	switch (CHESS_PIECE_GET_TYPE(f)){
 		case CHESS_PIECE_TYPE_PAWN:
 			if (CHESS_PIECE_GET_COLOR(f)==CHESS_PIECE_COLOR_WHITE){
@@ -72,6 +71,22 @@ PossibleMoves get_moves(ChessBoard b,uint8_t x,uint8_t y){
 					o.e=realloc(o.e,o.l*sizeof(uint8_t));
 					*(o.e+o.l-1)=CHESS_BOARD_POS(x,y-2);
 				}
+				if (x){
+					ChessPiece t=b->b[CHESS_BOARD_POS(x-1,y-1)];
+					if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
+						o.l++;
+						o.e=realloc(o.e,o.l*sizeof(uint8_t));
+						*(o.e+o.l-1)=CHESS_BOARD_POS(x-1,y-1);
+					}
+				}
+				if (x<7){
+					ChessPiece t=b->b[CHESS_BOARD_POS(x+1,y-1)];
+					if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
+						o.l++;
+						o.e=realloc(o.e,o.l*sizeof(uint8_t));
+						*(o.e+o.l-1)=CHESS_BOARD_POS(x+1,y-1);
+					}
+				}
 			}
 			else{
 				if (!CHESS_PIECE_EXISTS(b->b[CHESS_BOARD_POS(x,y+1)])){
@@ -83,6 +98,22 @@ PossibleMoves get_moves(ChessBoard b,uint8_t x,uint8_t y){
 					o.l++;
 					o.e=realloc(o.e,o.l*sizeof(uint8_t));
 					*(o.e+o.l-1)=CHESS_BOARD_POS(x,y+2);
+				}
+				if (x){
+					ChessPiece t=b->b[CHESS_BOARD_POS(x-1,y+1)];
+					if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
+						o.l++;
+						o.e=realloc(o.e,o.l*sizeof(uint8_t));
+						*(o.e+o.l-1)=CHESS_BOARD_POS(x-1,y+1);
+					}
+				}
+				if (x<7){
+					ChessPiece t=b->b[CHESS_BOARD_POS(x+1,y+1)];
+					if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
+						o.l++;
+						o.e=realloc(o.e,o.l*sizeof(uint8_t));
+						*(o.e+o.l-1)=CHESS_BOARD_POS(x+1,y+1);
+					}
 				}
 			}
 			break;
@@ -103,10 +134,16 @@ PossibleMoves get_moves(ChessBoard b,uint8_t x,uint8_t y){
 
 
 void make_move(ChessBoard b,uint8_t x0,uint8_t y0,uint8_t x1,uint8_t y1){
+	const uint8_t pp[]={0,1,3,3,5,9,100};
 	ChessPiece t=b->b[CHESS_BOARD_POS(x1,y1)];
 	if (CHESS_PIECE_EXISTS(t)){
-		printf("\x1b[0m\nPiece: %hhu\n",CHESS_PIECE_GET_TYPE(t));
-		exit(1);
+		printf("\x1b[0m\nPiece: %hhu (%hhu points)\n",CHESS_PIECE_GET_TYPE(t),pp[CHESS_PIECE_GET_TYPE(t)]);
+		if (b->t==CHESS_PIECE_COLOR_WHITE){
+			b->ws+=pp[CHESS_PIECE_GET_TYPE(t)];
+		}
+		else{
+			b->bs+=pp[CHESS_PIECE_GET_TYPE(t)];
+		}
 	}
 	b->b[CHESS_BOARD_POS(x1,y1)]=b->b[CHESS_BOARD_POS(x0,y0)];
 	b->b[CHESS_BOARD_POS(x0,y0)]=CHESS_PIECE_EMPTY;
@@ -134,8 +171,9 @@ void run_console_chess_game(ChessBoard b){
 	uint8_t vm=0;
 	printf("\x1b[?25l");
 	while (1){
-		printf("\x1b[0;0H\x1b[2J");
+		printf("\x1b[0;0H\x1b[2J\x1b[48;2;40;40;40m\x1b[38;2;29;68;225m  A B C D E F G H   \n");
 		for (uint8_t i=0;i<8;i++){
+			printf("\x1b[38;2;25;230;100m%c ",i+48);
 			for (uint8_t j=0;j<8;j++){
 				ChessPiece f=b->b[CHESS_BOARD_POS(j,i)];
 				uint8_t sm=(i==y0&&j==x0&&CHESS_PIECE_EXISTS(f)&&CHESS_PIECE_GET_COLOR(f)==b->t&&pm.l?1:0);
@@ -172,8 +210,9 @@ void run_console_chess_game(ChessBoard b){
 				putchar(pl0[CHESS_PIECE_GET_TYPE(f)]);
 				putchar(pl1[CHESS_PIECE_GET_TYPE(f)]);
 			}
-			putchar('\n');
+			printf("\x1b[48;2;40;40;40m  \n");
 		}
+		printf("                    \n");
 		printf("\x1b[38;2;230;230;230m\x1b[49m\nFrom: ");
 		if (!e){
 			printf("\x1b[48;2;30;30;30m");
@@ -227,7 +266,7 @@ void run_console_chess_game(ChessBoard b){
 				for (uint8_t i=0;i<pm.l;i++){
 					printf("\x1b[38;2;14;32;108m%c\x1b[38;2;12;110;46m%c",CHESS_BOARD_POS_X(*(pm.e+i))+65,CHESS_BOARD_POS_Y(*(pm.e+i))+49);
 					if (i<pm.l-1){
-						printf("\x1b[38;2;150;150;150m, ");
+						printf("\x1b[38;2;53;53;53m, ");
 					}
 				}
 				if (!vm&&x1!=UINT8_MAX&&y1!=UINT8_MAX){
