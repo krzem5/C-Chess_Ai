@@ -396,6 +396,9 @@ uint8_t default_player_move(ChessBoard b,Move lm,Move* m){
 	const char pl0[]={' ','P','K','B','R','Q','K'};
 	const char pl1[]={' ',' ','n',' ',' ',' ',' '};
 	(void)lm;
+	if (CHESS_BOARD_GET_STATE(b->f)!=CHESS_BOARD_STATE_PLAYING){
+		return 0;
+	}
 	uint8_t x0=UINT8_MAX;
 	uint8_t y0=UINT8_MAX;
 	uint8_t x1=UINT8_MAX;
@@ -607,6 +610,9 @@ uint8_t default_player_move(ChessBoard b,Move lm,Move* m){
 			}
 		}
 	}
+	if (pm.l){
+		free(pm.e);
+	}
 	printf("\x1b[0;0H\x1b[2J\x1b[?25h");
 	return 0;
 }
@@ -618,11 +624,15 @@ void run_game(ChessBoard b,move_getter_func wf,move_getter_func bf){
 	while (CHESS_BOARD_GET_STATE(b->f)==CHESS_BOARD_STATE_PLAYING){
 		Move m;
 		if ((CHESS_BOARD_GET_TURN(b->f)==CHESS_PIECE_COLOR_WHITE?wf:bf)(b,lm,&m)){
+			b->f=CHESS_BOARD_SET_TURN(CHESS_PIECE_COLOR_WHITE)|CHESS_PIECE_SET_STATE(CHESS_BOARD_STATE_DRAW);
 			break;
 		}
 		make_move(b,CHESS_MOVE_GET_X0(m),CHESS_MOVE_GET_Y0(m),CHESS_MOVE_GET_X1(m),CHESS_MOVE_GET_Y1(m));
 		lm=m;
 	}
+	wf(b,0,NULL);
+	b->f=CHESS_BOARD_SET_TURN(CHESS_PIECE_COLOR_BLACK)|CHESS_BOARD_GET_STATE(b->f);
+	bf(b,0,NULL);
 }
 
 

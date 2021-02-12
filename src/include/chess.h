@@ -30,7 +30,7 @@
 #define CHESS_MOVE_GET_POS0(m) ((m)&63)
 #define CHESS_MOVE_GET_POS1(m) ((m)>>6)
 #define CHESS_MOVE_SET(x0,y0,x1,y1) ((x0)|((y0)<<3)|((x1)<<6)|((y1)<<9))
-#define CHESS_MOVE_SET_2POS(p0,p1) ((p0)|((p0)<<6))
+#define CHESS_MOVE_SET_2POS(p0,p1) ((p0)|((p1)<<6))
 #define CHESS_FLIP_COLOR(c) (!(c))
 #define CHESS_BOARD_POS_UNKNOWN (0b111111+1)
 #define CHESS_BOARD_STATE_PLAYING 0
