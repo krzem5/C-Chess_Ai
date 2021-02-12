@@ -6,9 +6,7 @@
 
 
 
-#define MINMAX_DEPTH 6
-#define FIG_EXP 1
-#define MINMAX_DEPTH_EXP 1.5f
+#define MINMAX_DEPTH 8
 
 
 
@@ -57,22 +55,22 @@ float _eval_board_piece(uint8_t p,uint8_t pp,uint8_t t){
 	float o=0;
 	switch (CHESS_PIECE_GET_TYPE(p)){
 		case CHESS_PIECE_TYPE_PAWN:
-			o+=powf(1+1*(cl==CHESS_PIECE_COLOR_WHITE?W_PAWN_BOARD_POS:B_PAWN_BOARD_POS)[pp],FIG_EXP);
+			o+=1*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_PAWN_BOARD_POS:B_PAWN_BOARD_POS)[pp]);
 			break;
 		case CHESS_PIECE_TYPE_KNIGHT:
-			o+=powf(3+3*(cl==CHESS_PIECE_COLOR_WHITE?W_KNIGHT_BOARD_POS:B_KNIGHT_BOARD_POS)[pp],FIG_EXP);
+			o+=3*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_KNIGHT_BOARD_POS:B_KNIGHT_BOARD_POS)[pp]);
 			break;
 		case CHESS_PIECE_TYPE_BISHOP:
-			o+=powf(3+3*(cl==CHESS_PIECE_COLOR_WHITE?W_BISHOP_BOARD_POS:B_BISHOP_BOARD_POS)[pp],FIG_EXP);
+			o+=3*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_BISHOP_BOARD_POS:B_BISHOP_BOARD_POS)[pp]);
 			break;
 		case CHESS_PIECE_TYPE_ROOK:
-			o+=powf(5+5*(cl==CHESS_PIECE_COLOR_WHITE?W_ROOK_BOARD_POS:B_ROOK_BOARD_POS)[pp],FIG_EXP);
+			o+=5*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_ROOK_BOARD_POS:B_ROOK_BOARD_POS)[pp]);
 			break;
 		case CHESS_PIECE_TYPE_QUEEN:
-			o+=powf(9+9*(cl==CHESS_PIECE_COLOR_WHITE?W_QUEEN_BOARD_POS:B_QUEEN_BOARD_POS)[pp],FIG_EXP);
+			o+=9*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_QUEEN_BOARD_POS:B_QUEEN_BOARD_POS)[pp]);
 			break;
 		case CHESS_PIECE_TYPE_KING:
-			o+=powf(1000+1000*(cl==CHESS_PIECE_COLOR_WHITE?W_KING_BOARD_POS:B_KING_BOARD_POS)[pp],FIG_EXP);
+			o+=1000*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_KING_BOARD_POS:B_KING_BOARD_POS)[pp]);
 			break;
 	}
 	return o*(cl==t?1:-1);
@@ -105,9 +103,14 @@ void _get_moves_cb(void* dt,Move m){
 
 
 
+#ifndef NDEBUG
+float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t,uint64_t* tn){
+	(*tn)++;
+#else
 float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t){
+#endif
 	if (!d||(n->f&2)){
-		return n->v*powf(((float)d+1)/MINMAX_DEPTH,MINMAX_DEPTH_EXP);
+		return n->v*((float)d+1)/MINMAX_DEPTH;
 	}
 	if (n->cnl==UINT8_MAX){
 		n->cnl=0;
@@ -124,7 +127,11 @@ float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t){
 	if (mx){
 		float o=-INFINITY;
 		for (uint8_t i=0;i<n->cnl;i++){
+#ifndef NDEBUG
+			float nv=_minmax(n->cn+i,d-1,a,b,0,t,tn);
+#else
 			float nv=_minmax(n->cn+i,d-1,a,b,0,t);
+#endif
 			if (nv>a){
 				a=nv;
 			}
@@ -135,11 +142,15 @@ float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t){
 				o=nv;
 			}
 		}
-		return o+n->v*powf(((float)d+1)/MINMAX_DEPTH,MINMAX_DEPTH_EXP);
+		return o+n->v*((float)d+1)/MINMAX_DEPTH;
 	}
 	float o=INFINITY;
 	for (uint8_t i=0;i<n->cnl;i++){
+#ifndef NDEBUG
+		float nv=_minmax(n->cn+i,d-1,a,b,1,t,tn);
+#else
 		float nv=_minmax(n->cn+i,d-1,a,b,1,t);
+#endif
 		if (nv<b){
 			b=nv;
 		}
@@ -150,7 +161,7 @@ float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t){
 			o=nv;
 		}
 	}
-	return o+n->v*powf(((float)d+1)/MINMAX_DEPTH,MINMAX_DEPTH_EXP);
+	return o+n->v*((float)d+1)/MINMAX_DEPTH;
 }
 
 
@@ -180,10 +191,6 @@ BoardNode _free_nodes(BoardNode b,uint8_t i){
 
 void _run_minmax(void* dt,Move m){
 	CbArgs* a=(CbArgs*)dt;
-#ifndef NDEBUG
-	printf("Running MinMax with d = %u and move = {%u, %u} (%u) -> {%u, %u} (%u) => ",MINMAX_DEPTH,CHESS_MOVE_GET_X0(m),CHESS_MOVE_GET_Y0(m),CHESS_PIECE_GET_TYPE(a->r->b[CHESS_MOVE_GET_POS0(m)]),CHESS_MOVE_GET_X1(m),CHESS_MOVE_GET_Y1(m),CHESS_PIECE_GET_TYPE(a->r->b[CHESS_MOVE_GET_POS1(m)]));
-	fflush(stdout);
-#endif
 	a->r->cnl++;
 	a->r->cn=realloc(a->r->cn,a->r->cnl*sizeof(struct _BOARD_NODE));
 	BoardNode nn=a->r->cn+a->r->cnl-1;
@@ -200,9 +207,14 @@ void _run_minmax(void* dt,Move m){
 	nn->m=m;
 	nn->cnl=UINT8_MAX;
 	nn->cn=NULL;
-	float s=_minmax(nn,MINMAX_DEPTH-1,-INFINITY,INFINITY,1,a->r->f&1);
 #ifndef NDEBUG
-	printf("%f\n",s);
+	printf("Running MinMax with depth = %hhu and move = {%hhu %hhu (%hhu), %hhu %hhu (%hhu)} => ",MINMAX_DEPTH,CHESS_MOVE_GET_X0(m),CHESS_MOVE_GET_Y0(m),CHESS_PIECE_GET_TYPE(a->r->b[CHESS_MOVE_GET_POS0(m)]),CHESS_MOVE_GET_X1(m),CHESS_MOVE_GET_Y1(m),CHESS_PIECE_GET_TYPE(a->r->b[CHESS_MOVE_GET_POS1(m)]));
+	fflush(stdout);
+	uint64_t tn=0;
+	float s=_minmax(nn,MINMAX_DEPTH-1,-INFINITY,INFINITY,1,a->r->f&1,&tn);
+	printf("%f (%llu Nodes Visisted)\n",s,tn);
+#else
+	float s=_minmax(nn,MINMAX_DEPTH-1,-INFINITY,INFINITY,1,a->r->f&1);
 #endif
 	if (s>a->bs){
 		a->bs=s;
@@ -258,7 +270,7 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 				break;
 			}
 			if (i==r->cnl-1){
-				printf("Unable to find Player Move ({%u, %u} (%u) -> {%u, %u} (%u))!\n",CHESS_MOVE_GET_X0(lm),CHESS_MOVE_GET_Y0(lm),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS0(lm)]),CHESS_MOVE_GET_X1(lm),CHESS_MOVE_GET_Y1(lm),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS1(lm)]));
+				printf("Unable to find Player Move ({%u, %u} (%u) -> {%u, %u} (%u))! (This shouldn't happen!)\n",CHESS_MOVE_GET_X0(lm),CHESS_MOVE_GET_Y0(lm),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS0(lm)]),CHESS_MOVE_GET_X1(lm),CHESS_MOVE_GET_Y1(lm),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS1(lm)]));
 				return 1;
 			}
 		}
@@ -275,12 +287,13 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 		else{
 			for (i=0;i<r->cnl;i++){
 #ifndef NDEBUG
-				printf("Running MinMax with d = %u and move = {%u, %u} (%u) -> {%u, %u} (%u) => ",MINMAX_DEPTH,CHESS_MOVE_GET_X0((r->cn+i)->m),CHESS_MOVE_GET_Y0((r->cn+i)->m),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS0((r->cn+i)->m)]),CHESS_MOVE_GET_X1((r->cn+i)->m),CHESS_MOVE_GET_Y1((r->cn+i)->m),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS1((r->cn+i)->m)]));
+				printf("Running MinMax with depth = %hhu and move = {%hhu %hhu (%hhu), %hhu %hhu (%hhu)} => ",MINMAX_DEPTH,CHESS_MOVE_GET_X0((r->cn+i)->m),CHESS_MOVE_GET_Y0((r->cn+i)->m),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS0((r->cn+i)->m)]),CHESS_MOVE_GET_X1((r->cn+i)->m),CHESS_MOVE_GET_Y1((r->cn+i)->m),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS1((r->cn+i)->m)]));
 				fflush(stdout);
-#endif
+				uint64_t tn=0;
+				float s=_minmax(r->cn+i,MINMAX_DEPTH-1,-INFINITY,INFINITY,1,t,&tn);
+				printf("%f (%llu Nodes Visisted)\n",s,tn);
+#else
 				float s=_minmax(r->cn+i,MINMAX_DEPTH-1,-INFINITY,INFINITY,1,t);
-#ifndef NDEBUG
-				printf("%f\n",s);
 #endif
 				if (s>cb_a.bs){
 					cb_a.bs=s;

@@ -120,7 +120,7 @@ void _add_pm(void* dt,Move m){
 	pm->l++;
 	pm->e=realloc(pm->e,pm->l*sizeof(uint8_t));
 	uint8_t c=CHESS_MOVE_GET_POS1(m);
-	uint8_t p=CHESS_BOARD_POS_TO_SORT(m);
+	uint8_t p=CHESS_BOARD_POS_TO_SORT(c);
 	for (uint8_t i=0;i<pm->l;i++){
 		if (i==pm->l-1||CHESS_BOARD_POS_TO_SORT(*(pm->e+i))>m){
 			for (uint8_t j=i;j<pm->l-1;j++){
@@ -327,7 +327,7 @@ void make_move(ChessBoard b,uint8_t x0,uint8_t y0,uint8_t x1,uint8_t y1){
 
 
 
-uint8_t default_player_move(ChessBoard b,Move lm,Move* m){
+uint8_t default_player_move(ChessBoard b,Move lm,Move* o){
 	const char pl0[]={' ','P','K','B','R','Q','K'};
 	const char pl1[]={' ',' ','n',' ',' ',' ',' '};
 	(void)lm;
@@ -464,7 +464,8 @@ uint8_t default_player_move(ChessBoard b,Move lm,Move* m){
 		int c=_getch();
 		uint8_t u_m=0;
 		if (c==3){
-			return 1;
+			*o=CHESS_MOVE_UNKNOWN;
+			break;
 		}
 		else if (c==9){
 			ChessPiece f=b->b[CHESS_BOARD_POS(x0,y0)];
@@ -479,7 +480,7 @@ uint8_t default_player_move(ChessBoard b,Move lm,Move* m){
 		}
 		else if (c==13){
 			if (e==1&&vm){
-				*m=CHESS_MOVE_SET(x0,y0,x1,y1);
+				*o=CHESS_MOVE_SET(x0,y0,x1,y1);
 				break;
 			}
 		}
@@ -546,7 +547,7 @@ uint8_t default_player_move(ChessBoard b,Move lm,Move* m){
 		free(pm.e);
 	}
 	printf("\x1b[0;0H\x1b[2J\x1b[?25h");
-	return 0;
+	return (*o==CHESS_MOVE_UNKNOWN?1:0);
 }
 
 
