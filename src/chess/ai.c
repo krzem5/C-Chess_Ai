@@ -6,8 +6,9 @@
 
 
 
-#define MINMAX_DEPTH 4
-#define FIG_EXP 2
+#define MINMAX_DEPTH 6
+#define FIG_EXP 1
+#define MINMAX_DEPTH_EXP 1.5f
 
 
 
@@ -27,6 +28,7 @@ const static float W_KING_BOARD_POS[]={-3,-4,-4,-5,-5,-4,-4,-3,-3,-4,-4,-5,-5,-4
 
 
 typedef struct _BOARD_NODE* BoardNode;
+typedef struct _CB_ARGS CbArgs;
 
 
 
@@ -34,8 +36,18 @@ struct _BOARD_NODE{
 	ChessPiece b[64];
 	Move m;
 	float v;
+	uint8_t f;
 	uint8_t cnl;
 	BoardNode cn;
+};
+
+
+
+struct _CB_ARGS{
+	Move* o;
+	float bs;
+	uint8_t bi;
+	BoardNode r;
 };
 
 
@@ -45,22 +57,22 @@ float _eval_board_piece(uint8_t p,uint8_t pp,uint8_t t){
 	float o=0;
 	switch (CHESS_PIECE_GET_TYPE(p)){
 		case CHESS_PIECE_TYPE_PAWN:
-			o+=1*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_PAWN_BOARD_POS:B_PAWN_BOARD_POS)[pp])*FIG_EXP;
+			o+=powf(1+1*(cl==CHESS_PIECE_COLOR_WHITE?W_PAWN_BOARD_POS:B_PAWN_BOARD_POS)[pp],FIG_EXP);
 			break;
 		case CHESS_PIECE_TYPE_KNIGHT:
-			o+=3*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_KNIGHT_BOARD_POS:B_KNIGHT_BOARD_POS)[pp])*FIG_EXP;
+			o+=powf(3+3*(cl==CHESS_PIECE_COLOR_WHITE?W_KNIGHT_BOARD_POS:B_KNIGHT_BOARD_POS)[pp],FIG_EXP);
 			break;
 		case CHESS_PIECE_TYPE_BISHOP:
-			o+=3*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_BISHOP_BOARD_POS:B_BISHOP_BOARD_POS)[pp])*FIG_EXP;
+			o+=powf(3+3*(cl==CHESS_PIECE_COLOR_WHITE?W_BISHOP_BOARD_POS:B_BISHOP_BOARD_POS)[pp],FIG_EXP);
 			break;
 		case CHESS_PIECE_TYPE_ROOK:
-			o+=5*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_ROOK_BOARD_POS:B_ROOK_BOARD_POS)[pp])*FIG_EXP;
+			o+=powf(5+5*(cl==CHESS_PIECE_COLOR_WHITE?W_ROOK_BOARD_POS:B_ROOK_BOARD_POS)[pp],FIG_EXP);
 			break;
 		case CHESS_PIECE_TYPE_QUEEN:
-			o+=9*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_QUEEN_BOARD_POS:B_QUEEN_BOARD_POS)[pp])*FIG_EXP;
+			o+=powf(9+9*(cl==CHESS_PIECE_COLOR_WHITE?W_QUEEN_BOARD_POS:B_QUEEN_BOARD_POS)[pp],FIG_EXP);
 			break;
 		case CHESS_PIECE_TYPE_KING:
-			o+=1000*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_KING_BOARD_POS:B_KING_BOARD_POS)[pp])*FIG_EXP;
+			o+=powf(1000+1000*(cl==CHESS_PIECE_COLOR_WHITE?W_KING_BOARD_POS:B_KING_BOARD_POS)[pp],FIG_EXP);
 			break;
 	}
 	return o*(cl==t?1:-1);
@@ -68,65 +80,43 @@ float _eval_board_piece(uint8_t p,uint8_t pp,uint8_t t){
 
 
 
-BoardNode _create_board_node(uint8_t* b,uint8_t t){
-	BoardNode o=malloc(sizeof(struct _BOARD_NODE));
-	o->v=0;
-	for (uint8_t i=0;i<64;i++){
-		if (CHESS_PIECE_EXISTS(o->b[i]=b[i])){
-			o->v+=_eval_board_piece(o->b[i],i,t);
-		}
-	}
-	o->m=CHESS_MOVE_UNKNOWN;
-	o->cnl=UINT8_MAX;
-	o->cn=NULL;
-	return o;
-}
-
-
-
-BoardNode _make_board_node_move(BoardNode b,uint8_t t,Move m){
-	b->cnl++;
-	b->cn=realloc(b->cn,b->cnl*sizeof(struct _BOARD_NODE));
-	BoardNode o=b->cn+b->cnl-1;
-	o->v=0;
+void _get_moves_cb(void* dt,Move m){
+	BoardNode n=(BoardNode)dt;
+	n->cnl++;
+	n->cn=realloc(n->cn,n->cnl*sizeof(struct _BOARD_NODE));
+	BoardNode nn=n->cn+n->cnl-1;
+	nn->v=0;
+	nn->f=n->f&1;
 	for (uint8_t i=0;i<64;i++){
 		if (i==CHESS_MOVE_GET_POS0(m)){
-			o->b[i]=CHESS_PIECE_UNKNOWN;
+			nn->b[i]=CHESS_PIECE_UNKNOWN;
 		}
-		else if (CHESS_PIECE_EXISTS(o->b[i]=b->b[(i==CHESS_MOVE_GET_POS1(m)?CHESS_MOVE_GET_POS0(m):i)])){
-			o->v+=_eval_board_piece(o->b[i],i,t);
+		else if (CHESS_PIECE_EXISTS(nn->b[i]=n->b[(i==CHESS_MOVE_GET_POS1(m)?CHESS_MOVE_GET_POS0(m):i)])){
+			if (i==CHESS_MOVE_GET_POS1(m)&&CHESS_PIECE_GET_TYPE(n->b[i])==CHESS_PIECE_TYPE_KING){
+				nn->f|=2;
+			}
+			nn->v+=_eval_board_piece(nn->b[i],i,n->f&1);
 		}
 	}
-	o->m=m;
-	o->cnl=UINT8_MAX;
-	o->cn=NULL;
-	return o;
+	nn->m=m;
+	nn->cnl=UINT8_MAX;
+	nn->cn=NULL;
 }
 
 
 
 float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t){
-	if (!d||n->v<-100||n->v>100){
-		return n->v;
+	if (!d||(n->f&2)){
+		return n->v*powf(((float)d+1)/MINMAX_DEPTH,MINMAX_DEPTH_EXP);
 	}
-	PossibleMoves pm={
-		NULL,
-		0
-	};
 	if (n->cnl==UINT8_MAX){
 		n->cnl=0;
 		for (uint8_t i=0;i<64;i++){
 			ChessPiece p=n->b[i];
 			if (CHESS_PIECE_EXISTS(p)&&CHESS_PIECE_GET_COLOR(p)==(mx?CHESS_FLIP_COLOR(t):t)){
-				get_moves(n->b,CHESS_BOARD_POS_X(i),CHESS_BOARD_POS_Y(i),&pm);
-				for (uint8_t j=0;j<pm.l;j++){
-					_make_board_node_move(n,t,CHESS_MOVE_SET_2POS(i,*(pm.e+j)));
-				}
+				get_moves(n->b,i,_get_moves_cb,n);
 			}
 		}
-	}
-	if (pm.l){
-		free(pm.e);
 	}
 	if (n->cnl==0){
 		return n->v;
@@ -145,7 +135,7 @@ float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t){
 				o=nv;
 			}
 		}
-		return o;
+		return o+n->v*powf(((float)d+1)/MINMAX_DEPTH,MINMAX_DEPTH_EXP);
 	}
 	float o=INFINITY;
 	for (uint8_t i=0;i<n->cnl;i++){
@@ -160,18 +150,17 @@ float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t){
 			o=nv;
 		}
 	}
-	return o;
+	return o+n->v*powf(((float)d+1)/MINMAX_DEPTH,MINMAX_DEPTH_EXP);
 }
 
 
 
 BoardNode _free_nodes(BoardNode b,uint8_t i){
-	BoardNode o=NULL;
+	struct _BOARD_NODE o;
 	if (b->cnl!=UINT8_MAX){
 		for (uint8_t j=0;j<b->cnl;j++){
 			if (j==i){
-				o=malloc(sizeof(struct _BOARD_NODE));
-				memcpy(o,b->cn+j,sizeof(struct _BOARD_NODE));
+				o=*(b->cn+j);
 			}
 			else{
 				_free_nodes(b->cn+j,UINT8_MAX);
@@ -182,53 +171,82 @@ BoardNode _free_nodes(BoardNode b,uint8_t i){
 		}
 	}
 	if (i!=UINT8_MAX){
-		free(b);
+		*b=o;
 	}
-	return o;
+	return b;
+}
+
+
+
+void _run_minmax(void* dt,Move m){
+	CbArgs* a=(CbArgs*)dt;
+#ifndef NDEBUG
+	printf("Running MinMax with d = %u and move = {%u, %u} (%u) -> {%u, %u} (%u) => ",MINMAX_DEPTH,CHESS_MOVE_GET_X0(m),CHESS_MOVE_GET_Y0(m),CHESS_PIECE_GET_TYPE(a->r->b[CHESS_MOVE_GET_POS0(m)]),CHESS_MOVE_GET_X1(m),CHESS_MOVE_GET_Y1(m),CHESS_PIECE_GET_TYPE(a->r->b[CHESS_MOVE_GET_POS1(m)]));
+	fflush(stdout);
+#endif
+	a->r->cnl++;
+	a->r->cn=realloc(a->r->cn,a->r->cnl*sizeof(struct _BOARD_NODE));
+	BoardNode nn=a->r->cn+a->r->cnl-1;
+	nn->v=0;
+	nn->f=a->r->f&1;
+	for (uint8_t i=0;i<64;i++){
+		if (i==CHESS_MOVE_GET_POS0(m)){
+			nn->b[i]=CHESS_PIECE_UNKNOWN;
+		}
+		else if (CHESS_PIECE_EXISTS(nn->b[i]=a->r->b[(i==CHESS_MOVE_GET_POS1(m)?CHESS_MOVE_GET_POS0(m):i)])){
+			nn->v+=_eval_board_piece(nn->b[i],i,nn->f&1);
+		}
+	}
+	nn->m=m;
+	nn->cnl=UINT8_MAX;
+	nn->cn=NULL;
+	float s=_minmax(nn,MINMAX_DEPTH-1,-INFINITY,INFINITY,1,a->r->f&1);
+#ifndef NDEBUG
+	printf("%f\n",s);
+#endif
+	if (s>a->bs){
+		a->bs=s;
+		a->bi=a->r->cnl-1;
+		*(a->o)=m;
+	}
 }
 
 
 
 uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 	uint8_t t=CHESS_BOARD_GET_TURN(b->f);
+	BoardNode r=(BoardNode)(t==CHESS_PIECE_COLOR_WHITE?b->w_dt:b->b_dt);
 	if (CHESS_BOARD_GET_STATE(b->f)!=CHESS_BOARD_STATE_PLAYING){
-		_free_nodes((BoardNode)(t==CHESS_PIECE_COLOR_WHITE?b->w_dt:b->b_dt),UINT8_MAX);
+		if (r!=NULL){
+			_free_nodes(r,UINT8_MAX);
+		}
 		return 0;
 	}
-	if (t==CHESS_PIECE_COLOR_WHITE){
-		if (b->w_dt==NULL){
-			b->w_dt=_create_board_node(b->b,t);
+	if (r==NULL){
+		r=malloc(sizeof(struct _BOARD_NODE));
+		r->v=0;
+		r->f=t;
+		for (uint8_t i=0;i<64;i++){
+			if (CHESS_PIECE_EXISTS(r->b[i]=b->b[i])){
+				r->v+=_eval_board_piece(r->b[i],i,t);
+			}
 		}
+		r->m=CHESS_MOVE_UNKNOWN;
+		r->cnl=UINT8_MAX;
+		r->cn=NULL;
 	}
-	else{
-		if (b->b_dt==NULL){
-			b->b_dt=_create_board_node(b->b,t);
-		}
-	}
-	BoardNode r=(BoardNode)(t==CHESS_PIECE_COLOR_WHITE?b->w_dt:b->b_dt);
-	PossibleMoves pm={
-		NULL,
-		0
+	CbArgs cb_a={
+		o,
+		-INFINITY,
+		0,
+		r
 	};
-	float bs=-INFINITY;
-	uint8_t bi=0;
 	if (r->cnl==UINT8_MAX){
 		r->cnl=0;
 		for (uint8_t i=0;i<64;i++){
 			ChessPiece p=r->b[i];
 			if (CHESS_PIECE_EXISTS(p)&&CHESS_PIECE_GET_COLOR(p)==t){
-				get_moves(r->b,CHESS_BOARD_POS_X(i),CHESS_BOARD_POS_Y(i),&pm);
-				for (uint8_t j=0;j<pm.l;j++){
-					printf("Running MinMax with d = %u and move = {%u, %u} (%u) -> {%u, %u} (%u) => ",MINMAX_DEPTH,i&7,i>>3,CHESS_PIECE_GET_TYPE(r->b[i]),(*(pm.e+j))&7,(*(pm.e+j))>>3,CHESS_PIECE_GET_TYPE(r->b[*(pm.e+j)]));
-					fflush(stdout);
-					float s=_minmax(_make_board_node_move(r,t,CHESS_MOVE_SET_2POS(i,*(pm.e+j))),MINMAX_DEPTH-1,-INFINITY,INFINITY,1,t);
-					printf("%f\n",s);
-					if (s>bs){
-						bs=s;
-						bi=r->cnl-1;
-						*o=CHESS_MOVE_SET_2POS(i,*(pm.e+j));
-					}
-				}
+				get_moves(r->b,i,_run_minmax,&cb_a);
 			}
 		}
 	}
@@ -240,7 +258,7 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 				break;
 			}
 			if (i==r->cnl-1){
-				printf("Unable to find Player Move ({%u, %u} (%u) -> {%u, %u} (%u))!\n",lm&7,(lm>>3)&7,CHESS_PIECE_GET_TYPE(r->b[lm&63]),(lm>>6)&7,lm>>9,CHESS_PIECE_GET_TYPE(r->b[lm>>6]));
+				printf("Unable to find Player Move ({%u, %u} (%u) -> {%u, %u} (%u))!\n",CHESS_MOVE_GET_X0(lm),CHESS_MOVE_GET_Y0(lm),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS0(lm)]),CHESS_MOVE_GET_X1(lm),CHESS_MOVE_GET_Y1(lm),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS1(lm)]));
 				return 1;
 			}
 		}
@@ -250,46 +268,36 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 			for (i=0;i<64;i++){
 				ChessPiece p=r->b[i];
 				if (CHESS_PIECE_EXISTS(p)&&CHESS_PIECE_GET_COLOR(p)==t){
-					get_moves(r->b,CHESS_BOARD_POS_X(i),CHESS_BOARD_POS_Y(i),&pm);
-					for (uint8_t j=0;j<pm.l;j++){
-						printf("Running MinMax with d = %u and move = {%u, %u} (%u) -> {%u, %u} (%u) => ",MINMAX_DEPTH,i&7,i>>3,CHESS_PIECE_GET_TYPE(r->b[i]),(*(pm.e+j))&7,(*(pm.e+j))>>3,CHESS_PIECE_GET_TYPE(r->b[*(pm.e+j)]));
-						fflush(stdout);
-						float s=_minmax(_make_board_node_move(r,t,CHESS_MOVE_SET_2POS(i,*(pm.e+j))),MINMAX_DEPTH-1,-INFINITY,INFINITY,1,t);
-						printf("%f\n",s);
-						if (s>bs){
-							bs=s;
-							bi=r->cnl-1;
-							*o=CHESS_MOVE_SET_2POS(i,*(pm.e+j));
-						}
-					}
+					get_moves(r->b,i,_run_minmax,&cb_a);
 				}
 			}
 		}
 		else{
 			for (i=0;i<r->cnl;i++){
-				printf("Running MinMax with d = %u and move = {%u, %u} (%u) -> {%u, %u} (%u) => ",MINMAX_DEPTH,((r->cn+i)->m)&7,(((r->cn+i)->m)>>3)&7,CHESS_PIECE_GET_TYPE(r->b[((r->cn+i)->m)&63]),(((r->cn+i)->m)>>6)&7,((r->cn+i)->m)>>9,CHESS_PIECE_GET_TYPE(r->b[((r->cn+i)->m)>>6]));
+#ifndef NDEBUG
+				printf("Running MinMax with d = %u and move = {%u, %u} (%u) -> {%u, %u} (%u) => ",MINMAX_DEPTH,CHESS_MOVE_GET_X0((r->cn+i)->m),CHESS_MOVE_GET_Y0((r->cn+i)->m),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS0((r->cn+i)->m)]),CHESS_MOVE_GET_X1((r->cn+i)->m),CHESS_MOVE_GET_Y1((r->cn+i)->m),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS1((r->cn+i)->m)]));
 				fflush(stdout);
+#endif
 				float s=_minmax(r->cn+i,MINMAX_DEPTH-1,-INFINITY,INFINITY,1,t);
+#ifndef NDEBUG
 				printf("%f\n",s);
-				if (s>bs){
-					bs=s;
-					bi=i;
+#endif
+				if (s>cb_a.bs){
+					cb_a.bs=s;
+					cb_a.bi=i;
 					*o=(r->cn+i)->m;
 				}
 			}
 		}
 	}
-	if (pm.l){
-		free(pm.e);
-	}
-	if (bs==-INFINITY){
+	if (cb_a.bs==-INFINITY){
 		return 1;
 	}
 	if (t==CHESS_PIECE_COLOR_WHITE){
-		b->w_dt=_free_nodes(r,bi);
+		b->w_dt=_free_nodes(r,cb_a.bi);
 	}
 	else{
-		b->b_dt=_free_nodes(r,bi);
+		b->b_dt=_free_nodes(r,cb_a.bi);
 	}
 	return 0;
 }

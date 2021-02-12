@@ -30,13 +30,14 @@
 #define CHESS_MOVE_GET_POS0(m) ((m)&63)
 #define CHESS_MOVE_GET_POS1(m) ((m)>>6)
 #define CHESS_MOVE_SET(x0,y0,x1,y1) ((x0)|((y0)<<3)|((x1)<<6)|((y1)<<9))
-#define CHESS_MOVE_SET_2POS(p0,p1) ((p0)|((p1)<<6))
+#define CHESS_MOVE_SET2(p0,p1) ((p0)|((p1)<<6))
+#define CHESS_MOVE_SET3(p0,x1,y1) ((p0)|((x1)<<6)|((y1)<<9))
 #define CHESS_FLIP_COLOR(c) (!(c))
 #define CHESS_BOARD_POS_UNKNOWN (0b111111+1)
 #define CHESS_BOARD_STATE_PLAYING 0
 #define CHESS_BOARD_STATE_DRAW 1
 #define CHESS_BOARD_STATE_WIN 2
-#define CHESS_PIECE_UNKNOWN 0
+#define CHESS_PIECE_UNKNOWN 0b00000
 #define CHESS_PIECE_COLOR_WHITE 0
 #define CHESS_PIECE_COLOR_BLACK 1
 #define CHESS_PIECE_TYPE_NONE 0
@@ -57,6 +58,7 @@ typedef struct _CHESS_BOARD* ChessBoard;
 typedef struct _POSSIBLE_MOVES PossibleMoves;
 typedef uint16_t Move;
 typedef uint8_t (*move_getter_func)(ChessBoard b,Move lm,Move* o);
+typedef void (*get_moves_cb_t)(void* dt,Move m);
 
 
 
@@ -82,7 +84,7 @@ ChessBoard init_chess(void);
 
 
 
-void get_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* pm);
+void get_moves(ChessPiece* b,uint8_t p,get_moves_cb_t cb,void* cb_a);
 
 
 

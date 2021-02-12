@@ -5,17 +5,14 @@
 
 
 
-void _gen_diagonal_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
-	ChessPiece f=b[CHESS_BOARD_POS(x,y)];
-	uint8_t cl=CHESS_PIECE_GET_COLOR(f);
-	int8_t i=x+1;
-	int8_t j=y+1;
+void _gen_diagonal_moves(ChessPiece* b,uint8_t p,get_moves_cb_t cb,void* cb_a){
+	uint8_t cl=CHESS_PIECE_GET_COLOR(b[p]);
+	int8_t i=CHESS_BOARD_POS_X(p)+1;
+	int8_t j=CHESS_BOARD_POS_Y(p)+1;
 	while (i<8&&j<8){
 		ChessPiece t=b[CHESS_BOARD_POS(i,j)];
 		if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-			o->l++;
-			o->e=realloc(o->e,o->l*sizeof(uint8_t));
-			*(o->e+o->l-1)=CHESS_BOARD_POS(i,j);
+			cb(cb_a,CHESS_MOVE_SET3(p,i,j));
 		}
 		if (CHESS_PIECE_EXISTS(t)){
 			break;
@@ -23,14 +20,12 @@ void _gen_diagonal_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
 		i++;
 		j++;
 	}
-	i=x-1;
-	j=y+1;
+	i=CHESS_BOARD_POS_X(p)-1;
+	j=CHESS_BOARD_POS_Y(p)+1;
 	while (i>-1&&j<8){
 		ChessPiece t=b[CHESS_BOARD_POS(i,j)];
 		if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-			o->l++;
-			o->e=realloc(o->e,o->l*sizeof(uint8_t));
-			*(o->e+o->l-1)=CHESS_BOARD_POS(i,j);
+			cb(cb_a,CHESS_MOVE_SET3(p,i,j));
 		}
 		if (CHESS_PIECE_EXISTS(t)){
 			break;
@@ -38,14 +33,12 @@ void _gen_diagonal_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
 		i--;
 		j++;
 	}
-	i=x-1;
-	j=y-1;
+	i=CHESS_BOARD_POS_X(p)-1;
+	j=CHESS_BOARD_POS_Y(p)-1;
 	while (i>-1&&j>-1){
 		ChessPiece t=b[CHESS_BOARD_POS(i,j)];
 		if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-			o->l++;
-			o->e=realloc(o->e,o->l*sizeof(uint8_t));
-			*(o->e+o->l-1)=CHESS_BOARD_POS(i,j);
+			cb(cb_a,CHESS_MOVE_SET3(p,i,j));
 		}
 		if (CHESS_PIECE_EXISTS(t)){
 			break;
@@ -53,14 +46,12 @@ void _gen_diagonal_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
 		i--;
 		j--;
 	}
-	i=x+1;
-	j=y-1;
+	i=CHESS_BOARD_POS_X(p)+1;
+	j=CHESS_BOARD_POS_Y(p)-1;
 	while (i<8&&j>-1){
 		ChessPiece t=b[CHESS_BOARD_POS(i,j)];
 		if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-			o->l++;
-			o->e=realloc(o->e,o->l*sizeof(uint8_t));
-			*(o->e+o->l-1)=CHESS_BOARD_POS(i,j);
+			cb(cb_a,CHESS_MOVE_SET3(p,i,j));
 		}
 		if (CHESS_PIECE_EXISTS(t)){
 			break;
@@ -72,16 +63,15 @@ void _gen_diagonal_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
 
 
 
-void _gen_straight_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
-	ChessPiece f=b[CHESS_BOARD_POS(x,y)];
-	uint8_t cl=CHESS_PIECE_GET_COLOR(f);
+void _gen_straight_moves(ChessPiece* b,uint8_t p,get_moves_cb_t cb,void* cb_a){
+	uint8_t cl=CHESS_PIECE_GET_COLOR(b[p]);
+	uint8_t x=CHESS_BOARD_POS_X(p);
+	uint8_t y=CHESS_BOARD_POS_Y(p);
 	int8_t i=x+1;
 	while (i<8){
 		ChessPiece t=b[CHESS_BOARD_POS(i,y)];
 		if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-			o->l++;
-			o->e=realloc(o->e,o->l*sizeof(uint8_t));
-			*(o->e+o->l-1)=CHESS_BOARD_POS(i,y);
+			cb(cb_a,CHESS_MOVE_SET3(p,i,y));
 		}
 		if (CHESS_PIECE_EXISTS(t)){
 			break;
@@ -92,9 +82,7 @@ void _gen_straight_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
 	while (i>-1){
 		ChessPiece t=b[CHESS_BOARD_POS(i,y)];
 		if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-			o->l++;
-			o->e=realloc(o->e,o->l*sizeof(uint8_t));
-			*(o->e+o->l-1)=CHESS_BOARD_POS(i,y);
+			cb(cb_a,CHESS_MOVE_SET3(p,i,y));
 		}
 		if (CHESS_PIECE_EXISTS(t)){
 			break;
@@ -105,9 +93,7 @@ void _gen_straight_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
 	while (i<8){
 		ChessPiece t=b[CHESS_BOARD_POS(x,i)];
 		if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-			o->l++;
-			o->e=realloc(o->e,o->l*sizeof(uint8_t));
-			*(o->e+o->l-1)=CHESS_BOARD_POS(x,i);
+			cb(cb_a,CHESS_MOVE_SET3(p,x,i));
 		}
 		if (CHESS_PIECE_EXISTS(t)){
 			break;
@@ -118,9 +104,7 @@ void _gen_straight_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
 	while (i>-1){
 		ChessPiece t=b[CHESS_BOARD_POS(x,i)];
 		if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-			o->l++;
-			o->e=realloc(o->e,o->l*sizeof(uint8_t));
-			*(o->e+o->l-1)=CHESS_BOARD_POS(x,i);
+			cb(cb_a,CHESS_MOVE_SET3(p,x,i));
 		}
 		if (CHESS_PIECE_EXISTS(t)){
 			break;
@@ -131,33 +115,20 @@ void _gen_straight_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
 
 
 
-uint8_t _quicksort_partition(PossibleMoves* pm,uint8_t a,uint8_t b){
-	uint8_t p=CHESS_BOARD_POS_TO_SORT(pm->e[b]);
-	uint8_t o=a;
-	uint8_t t;
-	for (uint8_t j=a;j<=b;j++){
-		if (CHESS_BOARD_POS_TO_SORT(*(pm->e+j))<p){
-			t=*(pm->e+j);
-			*(pm->e+j)=*(pm->e+o);
-			*(pm->e+o)=t;
-			o++;
+void _add_pm(void* dt,Move m){
+	PossibleMoves* pm=(PossibleMoves*)dt;
+	pm->l++;
+	pm->e=realloc(pm->e,pm->l*sizeof(uint8_t));
+	uint8_t c=CHESS_MOVE_GET_POS1(m);
+	uint8_t p=CHESS_BOARD_POS_TO_SORT(m);
+	for (uint8_t i=0;i<pm->l;i++){
+		if (i==pm->l-1||CHESS_BOARD_POS_TO_SORT(*(pm->e+i))>m){
+			for (uint8_t j=i;j<pm->l-1;j++){
+				*(pm->e+j+1)=*(pm->e+j);
+			}
+			*(pm->e+i)=c;
+			break;
 		}
-	}
-	t=*(pm->e+b);
-	*(pm->e+b)=*(pm->e+o);
-	*(pm->e+o)=t;
-	return o;
-}
-
-
-
-void _quicksort(PossibleMoves* pm,uint8_t a,uint8_t b){
-	if (a<b){
-		uint8_t k=_quicksort_partition(pm,a,b);
-		if (k>0){
-			_quicksort(pm,a,k-1);
-		}
-		_quicksort(pm,k+1,b);
 	}
 }
 
@@ -208,72 +179,54 @@ ChessBoard init_chess(void){
 
 
 
-void get_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
-	if (o->l){
-		free(o->e);
-		o->e=NULL;
-		o->l=0;
-	}
-	ChessPiece f=b[CHESS_BOARD_POS(x,y)];
-	if (!CHESS_PIECE_EXISTS(f)){
-		return;
-	}
+void get_moves(ChessPiece* b,uint8_t p,get_moves_cb_t cb,void* cb_a){
+	ChessPiece f=b[p];
 	uint8_t cl=CHESS_PIECE_GET_COLOR(f);
+	uint8_t x=CHESS_BOARD_POS_X(p);
+	uint8_t y=CHESS_BOARD_POS_Y(p);
 	switch (CHESS_PIECE_GET_TYPE(f)){
 		case CHESS_PIECE_TYPE_PAWN:
 			if (CHESS_PIECE_GET_COLOR(f)==CHESS_PIECE_COLOR_WHITE){
-				if (!CHESS_PIECE_EXISTS(b[CHESS_BOARD_POS(x,y-1)])){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x,y-1);
-				}
 				if (y==6&&!CHESS_PIECE_EXISTS(b[CHESS_BOARD_POS(x,y-2)])){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x,y-2);
+					cb(cb_a,CHESS_MOVE_SET3(p,x,y-2));
 				}
-				if (x){
-					ChessPiece t=b[CHESS_BOARD_POS(x-1,y-1)];
-					if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
-						o->l++;
-						o->e=realloc(o->e,o->l*sizeof(uint8_t));
-						*(o->e+o->l-1)=CHESS_BOARD_POS(x-1,y-1);
+				if (y){
+					if (!CHESS_PIECE_EXISTS(b[CHESS_BOARD_POS(x,y-1)])){
+						cb(cb_a,CHESS_MOVE_SET3(p,x,y-1));
 					}
-				}
-				if (x<7){
-					ChessPiece t=b[CHESS_BOARD_POS(x+1,y-1)];
-					if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
-						o->l++;
-						o->e=realloc(o->e,o->l*sizeof(uint8_t));
-						*(o->e+o->l-1)=CHESS_BOARD_POS(x+1,y-1);
+					if (x){
+						ChessPiece t=b[CHESS_BOARD_POS(x-1,y-1)];
+						if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
+							cb(cb_a,CHESS_MOVE_SET3(p,x-1,y-1));
+						}
+					}
+					if (x<7){
+						ChessPiece t=b[CHESS_BOARD_POS(x+1,y-1)];
+						if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
+							cb(cb_a,CHESS_MOVE_SET3(p,x+1,y-1));
+						}
 					}
 				}
 			}
 			else{
-				if (!CHESS_PIECE_EXISTS(b[CHESS_BOARD_POS(x,y+1)])){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x,y+1);
-				}
 				if (y==1&&!CHESS_PIECE_EXISTS(b[CHESS_BOARD_POS(x,y+2)])){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x,y+2);
+					cb(cb_a,CHESS_MOVE_SET3(p,x,y+2));
 				}
-				if (x){
-					ChessPiece t=b[CHESS_BOARD_POS(x-1,y+1)];
-					if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
-						o->l++;
-						o->e=realloc(o->e,o->l*sizeof(uint8_t));
-						*(o->e+o->l-1)=CHESS_BOARD_POS(x-1,y+1);
+				if (y<7){
+					if (!CHESS_PIECE_EXISTS(b[CHESS_BOARD_POS(x,y+1)])){
+						cb(cb_a,CHESS_MOVE_SET3(p,x,y+1));
 					}
-				}
-				if (x<7){
-					ChessPiece t=b[CHESS_BOARD_POS(x+1,y+1)];
-					if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
-						o->l++;
-						o->e=realloc(o->e,o->l*sizeof(uint8_t));
-						*(o->e+o->l-1)=CHESS_BOARD_POS(x+1,y+1);
+					if (x){
+						ChessPiece t=b[CHESS_BOARD_POS(x-1,y+1)];
+						if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
+							cb(cb_a,CHESS_MOVE_SET3(p,x+1,y+1));
+						}
+					}
+					if (x<7){
+						ChessPiece t=b[CHESS_BOARD_POS(x+1,y+1)];
+						if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
+							cb(cb_a,CHESS_MOVE_SET3(p,x+1,y+1));
+						}
 					}
 				}
 			}
@@ -282,77 +235,61 @@ void get_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
 			if (x>1&&y<7){
 				ChessPiece t=b[CHESS_BOARD_POS(x-2,y+1)];
 				if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x-2,y+1);
+					cb(cb_a,CHESS_MOVE_SET3(p,x-2,y+1));
 				}
 			}
 			if (x>1&&y){
 				ChessPiece t=b[CHESS_BOARD_POS(x-2,y-1)];
 				if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x-2,y-1);
+					cb(cb_a,CHESS_MOVE_SET3(p,x-2,y-1));
 				}
 			}
 			if (x<6&&y<7){
 				ChessPiece t=b[CHESS_BOARD_POS(x+2,y+1)];
 				if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x+2,y+1);
+					cb(cb_a,CHESS_MOVE_SET3(p,x+2,y+1));
 				}
 			}
 			if (x<6&&y){
 				ChessPiece t=b[CHESS_BOARD_POS(x+2,y-1)];
 				if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x+2,y-1);
+					cb(cb_a,CHESS_MOVE_SET3(p,x+2,y-1));
 				}
 			}
 			if (x<7&&y>1){
 				ChessPiece t=b[CHESS_BOARD_POS(x+1,y-2)];
 				if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x+1,y-2);
+					cb(cb_a,CHESS_MOVE_SET3(p,x+1,y-2));
 				}
 			}
 			if (x&&y>1){
 				ChessPiece t=b[CHESS_BOARD_POS(x-1,y-2)];
 				if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x-1,y-2);
+					cb(cb_a,CHESS_MOVE_SET3(p,x-1,y-2));
 				}
 			}
 			if (x<7&&y<6){
 				ChessPiece t=b[CHESS_BOARD_POS(x+1,y+2)];
 				if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x+1,y+2);
+					cb(cb_a,CHESS_MOVE_SET3(p,x+1,y+2));
 				}
 			}
 			if (x&&y<6){
 				ChessPiece t=b[CHESS_BOARD_POS(x-1,y+2)];
 				if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-					o->l++;
-					o->e=realloc(o->e,o->l*sizeof(uint8_t));
-					*(o->e+o->l-1)=CHESS_BOARD_POS(x-1,y+2);
+					cb(cb_a,CHESS_MOVE_SET3(p,x-1,y+2));
 				}
 			}
 			break;
 		case CHESS_PIECE_TYPE_BISHOP:
-			_gen_diagonal_moves(b,x,y,o);
+			_gen_diagonal_moves(b,p,cb,cb_a);
 			break;
 		case CHESS_PIECE_TYPE_ROOK:
-			_gen_straight_moves(b,x,y,o);
+			_gen_straight_moves(b,p,cb,cb_a);
 			break;
 		case CHESS_PIECE_TYPE_QUEEN:
-			_gen_diagonal_moves(b,x,y,o);
-			_gen_straight_moves(b,x,y,o);
+			_gen_diagonal_moves(b,p,cb,cb_a);
+			_gen_straight_moves(b,p,cb,cb_a);
 			break;
 		case CHESS_PIECE_TYPE_KING:
 			for (int8_t i=-1;i<2;i++){
@@ -360,9 +297,7 @@ void get_moves(ChessPiece* b,uint8_t x,uint8_t y,PossibleMoves* o){
 					if ((int8_t)x+i>0&&x+i<8&&(int8_t)y+j>0&&y+j<8){
 						ChessPiece t=b[CHESS_BOARD_POS(x+i,y+j)];
 						if (!CHESS_PIECE_EXISTS(t)||CHESS_PIECE_GET_COLOR(t)!=cl){
-							o->l++;
-							o->e=realloc(o->e,o->l*sizeof(uint8_t));
-							*(o->e+o->l-1)=CHESS_BOARD_POS(x+i,y+j);
+							cb(cb_a,CHESS_MOVE_SET3(p,x+i,y+j));
 						}
 					}
 				}
@@ -591,10 +526,7 @@ uint8_t default_player_move(ChessBoard b,Move lm,Move* m){
 				pm.l=0;
 			}
 			if (CHESS_PIECE_EXISTS(b->b[CHESS_BOARD_POS(x0,y0)])&&CHESS_PIECE_GET_COLOR(b->b[CHESS_BOARD_POS(x0,y0)])==CHESS_BOARD_GET_TURN(b->f)){
-				get_moves(b->b,x0,y0,&pm);
-				if (pm.l){
-					_quicksort(&pm,0,pm.l-1);
-				}
+				get_moves(b->b,CHESS_BOARD_POS(x0,y0),_add_pm,&pm);
 			}
 		}
 		else if (u_m&&x1!=UINT8_MAX&&y1!=UINT8_MAX&&(x1!=lx1||y1!=ly1)){
