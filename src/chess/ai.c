@@ -6,7 +6,7 @@
 
 
 
-#define MINMAX_DEPTH 8
+#define MINMAX_DEPTH 7
 
 
 
@@ -55,22 +55,22 @@ float _eval_board_piece(uint8_t p,uint8_t pp,uint8_t t){
 	float o=0;
 	switch (CHESS_PIECE_GET_TYPE(p)){
 		case CHESS_PIECE_TYPE_PAWN:
-			o+=1*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_PAWN_BOARD_POS:B_PAWN_BOARD_POS)[pp]);
+			o+=10+(cl==CHESS_PIECE_COLOR_WHITE?W_PAWN_BOARD_POS:B_PAWN_BOARD_POS)[pp];
 			break;
 		case CHESS_PIECE_TYPE_KNIGHT:
-			o+=3*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_KNIGHT_BOARD_POS:B_KNIGHT_BOARD_POS)[pp]);
+			o+=32+(cl==CHESS_PIECE_COLOR_WHITE?W_KNIGHT_BOARD_POS:B_KNIGHT_BOARD_POS)[pp];
 			break;
 		case CHESS_PIECE_TYPE_BISHOP:
-			o+=3*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_BISHOP_BOARD_POS:B_BISHOP_BOARD_POS)[pp]);
+			o+=33+(cl==CHESS_PIECE_COLOR_WHITE?W_BISHOP_BOARD_POS:B_BISHOP_BOARD_POS)[pp];
 			break;
 		case CHESS_PIECE_TYPE_ROOK:
-			o+=5*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_ROOK_BOARD_POS:B_ROOK_BOARD_POS)[pp]);
+			o+=50+(cl==CHESS_PIECE_COLOR_WHITE?W_ROOK_BOARD_POS:B_ROOK_BOARD_POS)[pp];
 			break;
 		case CHESS_PIECE_TYPE_QUEEN:
-			o+=9*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_QUEEN_BOARD_POS:B_QUEEN_BOARD_POS)[pp]);
+			o+=90+(cl==CHESS_PIECE_COLOR_WHITE?W_QUEEN_BOARD_POS:B_QUEEN_BOARD_POS)[pp];
 			break;
 		case CHESS_PIECE_TYPE_KING:
-			o+=1000*(1+(cl==CHESS_PIECE_COLOR_WHITE?W_KING_BOARD_POS:B_KING_BOARD_POS)[pp]);
+			o+=100000+(cl==CHESS_PIECE_COLOR_WHITE?W_KING_BOARD_POS:B_KING_BOARD_POS)[pp];
 			break;
 	}
 	return o*(cl==t?1:-1);
@@ -116,7 +116,7 @@ float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t){
 		n->cnl=0;
 		for (uint8_t i=0;i<64;i++){
 			ChessPiece p=n->b[i];
-			if (CHESS_PIECE_EXISTS(p)&&CHESS_PIECE_GET_COLOR(p)==(mx?CHESS_FLIP_COLOR(t):t)){
+			if (CHESS_PIECE_EXISTS(p)&&CHESS_PIECE_GET_COLOR(p)==(mx?t:CHESS_FLIP_COLOR(t))){
 				get_moves(n->b,i,_get_moves_cb,n);
 			}
 		}
@@ -201,6 +201,9 @@ void _run_minmax(void* dt,Move m){
 			nn->b[i]=CHESS_PIECE_UNKNOWN;
 		}
 		else if (CHESS_PIECE_EXISTS(nn->b[i]=a->r->b[(i==CHESS_MOVE_GET_POS1(m)?CHESS_MOVE_GET_POS0(m):i)])){
+			if (i==CHESS_MOVE_GET_POS1(m)&&CHESS_PIECE_GET_TYPE(nn->b[i])==CHESS_PIECE_TYPE_KING){
+				nn->f|=2;
+			}
 			nn->v+=_eval_board_piece(nn->b[i],i,nn->f&1);
 		}
 	}
@@ -211,10 +214,10 @@ void _run_minmax(void* dt,Move m){
 	printf("Running MinMax with depth = %hhu and move = {%hhu %hhu (%hhu), %hhu %hhu (%hhu)} => ",MINMAX_DEPTH,CHESS_MOVE_GET_X0(m),CHESS_MOVE_GET_Y0(m),CHESS_PIECE_GET_TYPE(a->r->b[CHESS_MOVE_GET_POS0(m)]),CHESS_MOVE_GET_X1(m),CHESS_MOVE_GET_Y1(m),CHESS_PIECE_GET_TYPE(a->r->b[CHESS_MOVE_GET_POS1(m)]));
 	fflush(stdout);
 	uint64_t tn=0;
-	float s=_minmax(nn,MINMAX_DEPTH-1,-INFINITY,INFINITY,1,a->r->f&1,&tn);
+	float s=_minmax(nn,MINMAX_DEPTH-1,-INFINITY,INFINITY,0,a->r->f&1,&tn);
 	printf("%f (%llu Nodes Visisted)\n",s,tn);
 #else
-	float s=_minmax(nn,MINMAX_DEPTH-1,-INFINITY,INFINITY,1,a->r->f&1);
+	float s=_minmax(nn,MINMAX_DEPTH-1,-INFINITY,INFINITY,0,a->r->f&1);
 #endif
 	if (s>a->bs){
 		a->bs=s;
@@ -290,10 +293,10 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 				printf("Running MinMax with depth = %hhu and move = {%hhu %hhu (%hhu), %hhu %hhu (%hhu)} => ",MINMAX_DEPTH,CHESS_MOVE_GET_X0((r->cn+i)->m),CHESS_MOVE_GET_Y0((r->cn+i)->m),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS0((r->cn+i)->m)]),CHESS_MOVE_GET_X1((r->cn+i)->m),CHESS_MOVE_GET_Y1((r->cn+i)->m),CHESS_PIECE_GET_TYPE(r->b[CHESS_MOVE_GET_POS1((r->cn+i)->m)]));
 				fflush(stdout);
 				uint64_t tn=0;
-				float s=_minmax(r->cn+i,MINMAX_DEPTH-1,-INFINITY,INFINITY,1,t,&tn);
+				float s=_minmax(r->cn+i,MINMAX_DEPTH-1,-INFINITY,INFINITY,0,t,&tn);
 				printf("%f (%llu Nodes Visisted)\n",s,tn);
 #else
-				float s=_minmax(r->cn+i,MINMAX_DEPTH-1,-INFINITY,INFINITY,1,t);
+				float s=_minmax(r->cn+i,MINMAX_DEPTH-1,-INFINITY,INFINITY,0,t);
 #endif
 				if (s>cb_a.bs){
 					cb_a.bs=s;

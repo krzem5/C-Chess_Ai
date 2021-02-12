@@ -14,15 +14,8 @@
 #define CHESS_BOARD_POS_TO_SORT(p) ((((p)&7)<<3)|((p)>>3))
 #define CHESS_BOARD_GET_TURN(f) ((f)&1)
 #define CHESS_BOARD_GET_STATE(f) ((f)>>1)
-#define CHESS_BOARD_SET_TURN(f) ((f))
-#define CHESS_BOARD_SET_STATE(f) ((f)<<1)
-#define CHESS_PIECE_EXISTS(f) (!!(f))
-#define CHESS_PIECE_GET_COLOR(f) ((f)&1)
-#define CHESS_PIECE_GET_TYPE(f) (((f)>>1)&7)
-#define CHESS_PIECE_GET_STATE(f) ((f)>>4)
-#define CHESS_PIECE_SET_COLOR(c) (c)
-#define CHESS_PIECE_SET_TYPE(t) ((t)<<1)
-#define CHESS_PIECE_SET_STATE(s) ((s)<<4)
+#define CHESS_BOARD_SET_TURN(t) ((t))
+#define CHESS_BOARD_SET_STATE(s) ((s)<<1)
 #define CHESS_MOVE_GET_X0(m) ((m)&7)
 #define CHESS_MOVE_GET_Y0(m) (((m)>>3)&7)
 #define CHESS_MOVE_GET_X1(m) (((m)>>6)&7)
@@ -32,12 +25,28 @@
 #define CHESS_MOVE_SET(x0,y0,x1,y1) ((x0)|((y0)<<3)|((x1)<<6)|((y1)<<9))
 #define CHESS_MOVE_SET2(p0,p1) ((p0)|((p1)<<6))
 #define CHESS_MOVE_SET3(p0,x1,y1) ((p0)|((x1)<<6)|((y1)<<9))
+#define CHESS_PIECE_EXISTS(f) (!!(f))
+#define CHESS_PIECE_GET_COLOR(f) ((f)&1)
+#define CHESS_PIECE_GET_TYPE(f) (((f)>>1)&7)
+#define CHESS_PIECE_GET_STATE(f) (((f)>>4)&1)
+#define CHESS_PIECE_GET_ID(f) ((f)>>5)
+#define CHESS_PIECE_SET_COLOR(c) (c)
+#define CHESS_PIECE_SET_TYPE(t) ((t)<<1)
+#define CHESS_PIECE_SET_STATE(s) ((s)<<4)
+#define CHESS_PIECE_SET_ID(i) ((i)<<5)
+#define CHESS_PIECE_LIST_GET_LENGTH(l) ((l)>>60)
+#define CHESS_PIECE_LIST_GET_ELEM(l,i) (((l)>>((i)<<2))&15)
+#define CHESS_PIECE_LIST_SET_LENGTH(l,ll) (((l)&0xfffffffffffffff)|(((uint64_t)(ll))<<60))
+#define CHESS_PIECE_LIST_SET_ELEM(i,t,id) (((uint64_t)(CHESS_PIECE_ID_MAPPING[((t)<<3)|(id)]))<<((i)<<2))
+#define CHESS_PIECE_LIST_ELEM_GET_TYPE(e) (CHESS_PIECE_ID_TYPE[(e)])
+#define CHESS_PIECE_LIST_ELEM_GET_X(e) (CHESS_PIECE_ID_X[(e)])
 #define CHESS_FLIP_COLOR(c) (!(c))
 #define CHESS_BOARD_POS_UNKNOWN (0b111111+1)
 #define CHESS_BOARD_STATE_PLAYING 0
 #define CHESS_BOARD_STATE_DRAW 1
 #define CHESS_BOARD_STATE_WIN 2
-#define CHESS_PIECE_UNKNOWN 0b00000
+#define CHESS_MOVE_UNKNOWN (0b111111111111+1)
+#define CHESS_PIECE_UNKNOWN 0b00000000
 #define CHESS_PIECE_COLOR_WHITE 0
 #define CHESS_PIECE_COLOR_BLACK 1
 #define CHESS_PIECE_TYPE_NONE 0
@@ -49,7 +58,6 @@
 #define CHESS_PIECE_TYPE_KING 6
 #define CHESS_PIECE_STATE_NOT_MOVED 0
 #define CHESS_PIECE_STATE_MOVED 1
-#define CHESS_MOVE_UNKNOWN (0b111111111111+1)
 
 
 
@@ -64,9 +72,9 @@ typedef void (*get_moves_cb_t)(void* dt,Move m);
 
 struct _CHESS_BOARD{
 	ChessPiece b[64];
-	uint8_t f;
-	uint8_t ws;
-	uint8_t bs;
+	uint16_t f;
+	uint64_t wd;
+	uint64_t bd;
 	void* w_dt;
 	void* b_dt;
 };
@@ -80,15 +88,23 @@ struct _POSSIBLE_MOVES{
 
 
 
+extern const uint8_t CHESS_PIECE_ID_MAPPING[];
+
+
+
+extern const uint8_t CHESS_PIECE_ID_TYPE[];
+
+
+
+extern const uint8_t CHESS_PIECE_ID_X[];
+
+
+
 ChessBoard init_chess(void);
 
 
 
 void get_moves(ChessPiece* b,uint8_t p,get_moves_cb_t cb,void* cb_a);
-
-
-
-void make_move(ChessBoard b,uint8_t x0,uint8_t y0,uint8_t x1,uint8_t y1);
 
 
 
