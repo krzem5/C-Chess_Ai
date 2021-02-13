@@ -3,13 +3,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#ifndef NDEBUG
 #include <windows.h>
-#endif
 
 
 
 #define MINMAX_DEPTH 5
+#define PAGE_SIZE_MULT 16
+#define MEM_GET_BLOCK_SIZE(sz) ((sz)&0x7fffffffffffffff)
+#define MEM_GET_BLOCK_STATE(sz) ((uint8_t)((sz)>>63))
+#define MEM_SET_BLOCK_FREE (1llu<<63)
 
 
 
@@ -30,16 +32,17 @@ const static float B_PAWN_BOARD_POS[]={0,0,0,0,0,0,0,0,0.5,1,1,-2,-2,1,1,0.5,0.5
 
 typedef struct _BOARD_NODE* BoardNode;
 typedef struct _CB_ARGS CbArgs;
+typedef struct _MEM_BLOCK MemBlock;
 
 
 
 struct _BOARD_NODE{
 	ChessPiece b[64];
-	Move m;
+	BoardNode cn;
 	float v;
+	Move m;
 	uint8_t f;
 	uint8_t cnl;
-	BoardNode cn;
 };
 
 
@@ -50,6 +53,106 @@ struct _CB_ARGS{
 	BoardNode bn;
 	BoardNode r;
 };
+
+
+
+struct _MEM_BLOCK{
+	MemBlock* p;
+	MemBlock* n;
+	uint64_t sz;
+};
+
+
+
+uint16_t _ptr_ll=0;
+uint64_t* _ptr_l=NULL;
+MemBlock* _mem_h;
+size_t _pg_sz=0;
+
+
+
+void _free_node_list(void* p){
+	MemBlock* n=(MemBlock*)((uint8_t*)p-sizeof(MemBlock));
+	n->sz|=MEM_SET_BLOCK_FREE;
+	if (n->p&&MEM_GET_BLOCK_STATE(n->p->sz)){
+		n->p->sz+=n->sz+sizeof(MemBlock);
+		n->p->n=n->n;
+		if (n->n){
+			n->n->p=n->p;
+		}
+		n=n->p;
+	}
+	if (n->n&&MEM_GET_BLOCK_STATE(n->n->sz)){
+		n->sz+=n->n->sz+sizeof(MemBlock);
+		if (n->n->n){
+			n->n->n->p=n;
+		}
+		n->n=n->n->n;
+	}
+}
+
+
+
+void* _realloc_node_list(void* p,uint64_t l){
+	uint64_t ol=l;
+	l*=sizeof(struct _BOARD_NODE);
+	if (p==NULL){
+		MemBlock* n=_mem_h;
+		while (!MEM_GET_BLOCK_STATE(n->sz)||MEM_GET_BLOCK_SIZE(n->sz)<l+sizeof(MemBlock)){
+			if (!(n->n)){
+				_ptr_ll++;
+				_ptr_l=realloc(_ptr_l,_ptr_ll*sizeof(uint64_t));
+				*(_ptr_l+_ptr_ll-1)=(uint64_t)VirtualAlloc((void*)(*_ptr_l+_pg_sz*(_ptr_ll-1)),_pg_sz,MEM_COMMIT|MEM_RESERVE|MEM_LARGE_PAGES,PAGE_READWRITE);
+				if (MEM_GET_BLOCK_STATE(n->sz)){
+					n->sz+=_pg_sz;
+				}
+				else{
+					MemBlock* nn=(MemBlock*)(*(_ptr_l+_ptr_ll-1));
+					nn->p=n;
+					nn->n=NULL;
+					nn->sz=(_pg_sz-sizeof(MemBlock))|MEM_SET_BLOCK_FREE;
+					n->n=nn;
+					n=nn;
+				}
+				break;
+			}
+			n=n->n;
+		}
+		MemBlock* nn=(MemBlock*)((uint8_t*)n+l+sizeof(MemBlock));
+		nn->p=n;
+		nn->n=n->n;
+		nn->sz=(MEM_GET_BLOCK_SIZE(n->sz)-l-sizeof(MemBlock))|MEM_SET_BLOCK_FREE;
+		if (n->n){
+			n->n->p=nn;
+		}
+		n->n=nn;
+		n->sz=l;
+		return ((uint8_t*)n+sizeof(MemBlock));
+	}
+	MemBlock* n=(MemBlock*)((uint8_t*)p-sizeof(MemBlock));
+	if (n->n&&MEM_GET_BLOCK_STATE(n->n->sz)&&MEM_GET_BLOCK_SIZE(n->n->sz)>=l-n->sz){
+		MemBlock* tmp_n=n->n->n;
+		uint64_t tmp_sz=MEM_GET_BLOCK_SIZE(n->n->sz);
+		MemBlock* nn=(MemBlock*)((uint8_t*)n+l+sizeof(MemBlock));
+		nn->p=n;
+		nn->n=tmp_n;
+		nn->sz=(tmp_sz-(l-n->sz))|MEM_SET_BLOCK_FREE;
+		if (nn->n){
+			nn->n->p=nn;
+		}
+		n->n=nn;
+		n->sz=l;
+		return p;
+	}
+	uint64_t i=n->sz;
+	void* np=_realloc_node_list(NULL,ol);
+	while (i){
+		i--;
+		*((uint8_t*)np+i)=*((uint8_t*)p+i);
+	}
+	_free_node_list(p);
+	return np;
+}
 
 
 
@@ -84,7 +187,7 @@ float _eval_board_piece(uint8_t p,uint8_t pp,uint8_t t){
 void _get_moves_cb(void* dt,Move m){
 	BoardNode n=(BoardNode)dt;
 	n->cnl++;
-	n->cn=realloc(n->cn,n->cnl*sizeof(struct _BOARD_NODE));
+	n->cn=_realloc_node_list(n->cn,n->cnl);
 	BoardNode nn=n->cn+n->cnl-1;
 	nn->v=0;
 	nn->f=n->f&1;
@@ -118,8 +221,7 @@ float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t){
 	if (n->cnl==UINT8_MAX){
 		n->cnl=0;
 		for (uint8_t i=0;i<64;i++){
-			ChessPiece p=n->b[i];
-			if (CHESS_PIECE_EXISTS(p)&&CHESS_PIECE_GET_COLOR(p)==(mx?t:CHESS_FLIP_COLOR(t))){
+			if (CHESS_PIECE_EXISTS(n->b[i])&&CHESS_PIECE_GET_COLOR(n->b[i])==(mx?t:CHESS_FLIP_COLOR(t))){
 				get_moves(n->b,i,_get_moves_cb,n);
 			}
 		}
@@ -169,25 +271,15 @@ float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t){
 
 
 
-BoardNode _free_nodes(BoardNode b,uint8_t i){
-	struct _BOARD_NODE o;
+void _free_nodes(BoardNode b){
 	if (b->cnl!=UINT8_MAX){
-		for (uint8_t j=0;j<b->cnl;j++){
-			if (j==i){
-				o=*(b->cn+j);
-			}
-			else{
-				_free_nodes(b->cn+j,UINT8_MAX);
-			}
+		for (uint8_t i=0;i<b->cnl;i++){
+			_free_nodes(b->cn+i);
 		}
 		if (b->cnl){
-			free(b->cn);
+			_free_node_list(b->cn);
 		}
 	}
-	if (i!=UINT8_MAX){
-		*b=o;
-	}
-	return b;
 }
 
 
@@ -228,14 +320,14 @@ void _run_minmax(void* dt,Move m){
 #endif
 	if (s>a->bs){
 		if (a->bs!=-INFINITY){
-			_free_nodes(a->bn,UINT8_MAX);
+			_free_nodes(a->bn);
 		}
 		a->bs=s;
 		*a->bn=*nn;
-		*(a->o)=m;
+		*(a->o)=nn->m;
 	}
 	else{
-		_free_nodes(nn,UINT8_MAX);
+		_free_nodes(nn);
 	}
 	free(nn);
 }
@@ -247,10 +339,48 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 	BoardNode r=(BoardNode)(t==CHESS_PIECE_COLOR_WHITE?b->w_dt:b->b_dt);
 	if (CHESS_BOARD_GET_STATE(b->f)!=CHESS_BOARD_STATE_PLAYING){
 		if (r!=NULL){
-			_free_nodes(r,UINT8_MAX);
 			free(r);
 		}
+		while (_ptr_ll){
+			_ptr_ll--;
+			VirtualFree(*((void**)_ptr_l+_ptr_ll),0,MEM_RELEASE);
+		}
 		return 0;
+	}
+	if (!_ptr_ll){
+		LUID lm_p;
+		HANDLE tk;
+		if (LookupPrivilegeValue(NULL,SE_LOCK_MEMORY_NAME,&lm_p)&&OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY|TOKEN_ADJUST_PRIVILEGES,&tk)){
+			DWORD ln=0;
+			if (GetTokenInformation(tk,TokenPrivileges,NULL,0,&ln)==TRUE){
+				CloseHandle(tk);
+			}
+			else{
+				uint8_t* bf=HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,ln);
+				if (bf){
+					if (GetTokenInformation(tk,TokenPrivileges,bf,ln,&ln)){
+						TOKEN_PRIVILEGES* tk_p=(TOKEN_PRIVILEGES*)bf;
+						for (DWORD i=0;i<tk_p->PrivilegeCount;i++){
+							if (tk_p->Privileges[i].Luid.LowPart==lm_p.LowPart&&tk_p->Privileges[i].Luid.HighPart==lm_p.HighPart){
+								tk_p->Privileges[i].Attributes|=SE_PRIVILEGE_ENABLED;
+								AdjustTokenPrivileges(tk,FALSE,tk_p,ln,NULL,NULL);
+								break;
+							}
+						}
+					}
+					CloseHandle(tk);
+					HeapFree(GetProcessHeap(),0,bf);
+				}
+			}
+		}
+		_ptr_ll=1;
+		_ptr_l=malloc(sizeof(uint64_t));
+		_pg_sz=GetLargePageMinimum()*PAGE_SIZE_MULT;
+		*_ptr_l=(uint64_t)VirtualAlloc(NULL,_pg_sz,MEM_COMMIT|MEM_RESERVE|MEM_LARGE_PAGES,PAGE_READWRITE);
+		_mem_h=(void*)*_ptr_l;
+		_mem_h->p=NULL;
+		_mem_h->n=NULL;
+		_mem_h->sz=(_pg_sz-sizeof(MemBlock))|MEM_SET_BLOCK_FREE;
 	}
 	if (r==NULL){
 		r=malloc(sizeof(struct _BOARD_NODE));
@@ -273,8 +403,7 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 	};
 	if (r->cnl==UINT8_MAX){
 		for (uint8_t i=0;i<64;i++){
-			ChessPiece p=r->b[i];
-			if (CHESS_PIECE_EXISTS(p)&&CHESS_PIECE_GET_COLOR(p)==t){
+			if (CHESS_PIECE_EXISTS(r->b[i])&&CHESS_PIECE_GET_COLOR(r->b[i])==t){
 				get_moves(r->b,i,_run_minmax,&cb_a);
 			}
 		}
@@ -290,7 +419,21 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 				return 1;
 			}
 		}
-		r=_free_nodes(r,i);
+		struct _BOARD_NODE nr;
+		if (r->cnl!=UINT8_MAX){
+			for (uint8_t j=0;j<r->cnl;j++){
+				if (j==i){
+					nr=*(r->cn+j);
+				}
+				else{
+					_free_nodes(r->cn+j);
+				}
+			}
+			if (r->cnl){
+				_free_node_list(r->cn);
+			}
+		}
+		*r=nr;
 		if (r->cnl==UINT8_MAX){
 			for (i=0;i<64;i++){
 				if (CHESS_PIECE_EXISTS(r->b[i])&&CHESS_PIECE_GET_COLOR(r->b[i])==t){
@@ -313,22 +456,22 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 				QueryPerformanceCounter(&te);
 				printf("%.1f (%llu node%c, %.6f seconds)\n",s,tn,(tn==1?' ':'s'),(te.QuadPart-ts.QuadPart)*1e6/tf.QuadPart*1e-6);
 #else
-				float s=_minmax(r->cn+i,MINMAX_DEPTH-1,-INFINITY,INFINITY,0,t);
+				float s=_minmax(nn,MINMAX_DEPTH-1,-INFINITY,INFINITY,0,t);
 #endif
 				if (s>cb_a.bs){
 					if (cb_a.bs!=-INFINITY){
-						_free_nodes(cb_a.bn,UINT8_MAX);
+						_free_nodes(cb_a.bn);
 					}
 					cb_a.bs=s;
-					*cb_a.bn=*(r->cn+i);
+					*(cb_a.bn)=*(r->cn+i);
 					*o=(r->cn+i)->m;
 				}
 				else{
-					_free_nodes(r->cn+i,UINT8_MAX);
+					_free_nodes(r->cn+i);
 				}
 			}
 			if (r->cnl){
-				free(r->cn);
+				_free_node_list(r->cn);
 			}
 		}
 	}

@@ -1,7 +1,16 @@
 #include <chess.h>
 #include <ai.h>
 #include <windows.h>
+#include <stdio.h>
 
+struct _BOARD_NODE{
+	ChessPiece b[64];
+	struct _BOARD_NODE* cn;
+	float v;
+	Move m;
+	uint8_t f;
+	uint8_t cnl;
+};
 
 
 int main(int argc,const char** argv){
@@ -16,13 +25,13 @@ int main(int argc,const char** argv){
 	SetConsoleMode(ho,7);
 	CONSOLE_SCREEN_BUFFER_INFO sbi;
 	GetConsoleScreenBufferInfo(ho,&sbi);
-	SetConsoleWindowInfo(ho,1,&sbi.srWindow);
+	// SetConsoleWindowInfo(ho,1,&sbi.srWindow);
 	// COORD sz={
 	// 	sbi.srWindow.Right+1,
 	// 	sbi.srWindow.Bottom+1
 	// };
 	// SetConsoleScreenBufferSize(ho,sz);
-	SetConsoleWindowInfo(ho,1,&sbi.srWindow);
+	// SetConsoleWindowInfo(ho,1,&sbi.srWindow);
 	ChessBoard b=init_chess();
 	run_game(b,default_player_move,default_ai_move);
 	free_chess(b);
