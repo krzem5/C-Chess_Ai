@@ -47,7 +47,7 @@ struct _BOARD_NODE{
 struct _CB_ARGS{
 	Move* o;
 	float bs;
-	uint8_t bi;
+	BoardNode bn;
 	BoardNode r;
 };
 
@@ -194,9 +194,7 @@ BoardNode _free_nodes(BoardNode b,uint8_t i){
 
 void _run_minmax(void* dt,Move m){
 	CbArgs* a=(CbArgs*)dt;
-	a->r->cnl++;
-	a->r->cn=realloc(a->r->cn,a->r->cnl*sizeof(struct _BOARD_NODE));
-	BoardNode nn=a->r->cn+a->r->cnl-1;
+	BoardNode nn=malloc(sizeof(struct _BOARD_NODE));
 	nn->v=0;
 	nn->f=a->r->f&1;
 	for (uint8_t i=0;i<64;i++){
@@ -229,10 +227,17 @@ void _run_minmax(void* dt,Move m){
 	float s=_minmax(nn,MINMAX_DEPTH-1,-INFINITY,INFINITY,0,a->r->f&1);
 #endif
 	if (s>a->bs){
+		if (a->bs!=-INFINITY){
+			_free_nodes(a->bn,UINT8_MAX);
+		}
 		a->bs=s;
-		a->bi=a->r->cnl-1;
+		*a->bn=*nn;
 		*(a->o)=m;
 	}
+	else{
+		_free_nodes(nn,UINT8_MAX);
+	}
+	free(nn);
 }
 
 
@@ -243,6 +248,7 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 	if (CHESS_BOARD_GET_STATE(b->f)!=CHESS_BOARD_STATE_PLAYING){
 		if (r!=NULL){
 			_free_nodes(r,UINT8_MAX);
+			free(r);
 		}
 		return 0;
 	}
@@ -262,11 +268,10 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 	CbArgs cb_a={
 		o,
 		-INFINITY,
-		0,
+		malloc(sizeof(struct _BOARD_NODE)),
 		r
 	};
 	if (r->cnl==UINT8_MAX){
-		r->cnl=0;
 		for (uint8_t i=0;i<64;i++){
 			ChessPiece p=r->b[i];
 			if (CHESS_PIECE_EXISTS(p)&&CHESS_PIECE_GET_COLOR(p)==t){
@@ -277,8 +282,7 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 	else{
 		uint8_t i=0;
 		for (;i<r->cnl;i++){
-			BoardNode n=r->cn+i;
-			if (n->m==lm){
+			if ((r->cn+i)->m==lm){
 				break;
 			}
 			if (i==r->cnl-1){
@@ -288,10 +292,8 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 		}
 		r=_free_nodes(r,i);
 		if (r->cnl==UINT8_MAX){
-			r->cnl=0;
 			for (i=0;i<64;i++){
-				ChessPiece p=r->b[i];
-				if (CHESS_PIECE_EXISTS(p)&&CHESS_PIECE_GET_COLOR(p)==t){
+				if (CHESS_PIECE_EXISTS(r->b[i])&&CHESS_PIECE_GET_COLOR(r->b[i])==t){
 					get_moves(r->b,i,_run_minmax,&cb_a);
 				}
 			}
@@ -314,21 +316,33 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 				float s=_minmax(r->cn+i,MINMAX_DEPTH-1,-INFINITY,INFINITY,0,t);
 #endif
 				if (s>cb_a.bs){
+					if (cb_a.bs!=-INFINITY){
+						_free_nodes(cb_a.bn,UINT8_MAX);
+					}
 					cb_a.bs=s;
-					cb_a.bi=i;
+					*cb_a.bn=*(r->cn+i);
 					*o=(r->cn+i)->m;
 				}
+				else{
+					_free_nodes(r->cn+i,UINT8_MAX);
+				}
+			}
+			if (r->cnl){
+				free(r->cn);
 			}
 		}
 	}
+	free(r);
+	r=cb_a.bn;
 	if (cb_a.bs==-INFINITY){
+		free(cb_a.bn);
 		return 1;
 	}
 	if (t==CHESS_PIECE_COLOR_WHITE){
-		b->w_dt=_free_nodes(r,cb_a.bi);
+		b->w_dt=r;
 	}
 	else{
-		b->b_dt=_free_nodes(r,cb_a.bi);
+		b->b_dt=r;
 	}
 	return 0;
 }
