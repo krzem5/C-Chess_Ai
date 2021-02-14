@@ -8,10 +8,16 @@
 
 
 #define MINMAX_DEPTH 5
-#define PAGE_SIZE_MULT 16
-#define MEM_GET_BLOCK_SIZE(sz) ((sz)&0x7fffffffffffffff)
-#define MEM_GET_BLOCK_STATE(sz) ((uint8_t)((sz)>>63))
-#define MEM_SET_BLOCK_FREE (1llu<<63)
+#define MEM_HEADER_HAS_NEXT(h) ((uint8_t)(((h)->a)>>63))
+#define MEM_HEADER_GET_PREV(h) ((MemHeader*)(((h)->a)&0x7fffffffffffffff))
+#define MEM_HEADER_GET_NEXT(h) ((MemHeader*)(void*)((uint64_t)(void*)h+(((h)->b)&0x7fffffffffffffff)+sizeof(MemHeader)))
+#define MEM_HEADER_GET_SIZE(h) (((h)->b)&0x7fffffffffffffff)
+#define MEM_HEADER_GET_FREE(h) ((uint8_t)(((h)->b)>>63))
+#define MEM_HEADER_SET_PREV(p) ((uint64_t)p)
+#define MEM_HEADER_SET_NEXT 0x8000000000000000
+#define MEM_HEADER_SET_SIZE(l) ((uint64_t)l)
+#define MEM_HEADER_SET_FREE 0x8000000000000000
+#define MEM_HEADER_COPY_NEXT(h) (((h)->a)&0x8000000000000000)
 
 
 
@@ -32,7 +38,7 @@ const static float B_PAWN_BOARD_POS[]={0,0,0,0,0,0,0,0,0.5,1,1,-2,-2,1,1,0.5,0.5
 
 typedef struct _BOARD_NODE* BoardNode;
 typedef struct _CB_ARGS CbArgs;
-typedef struct _MEM_BLOCK MemBlock;
+typedef struct _MEM_HEADER MemHeader;
 
 
 
@@ -56,102 +62,77 @@ struct _CB_ARGS{
 
 
 
-struct _MEM_BLOCK{
-	MemBlock* p;
-	MemBlock* n;
-	uint64_t sz;
+struct _MEM_HEADER{
+	uint64_t a;
+	uint64_t b;
 };
 
 
 
 uint16_t _ptr_ll=0;
-uint64_t* _ptr_l=NULL;
-MemBlock* _mem_h;
+void** _ptr_l=NULL;
+MemHeader* _mem_h;
+MemHeader* _lf;
 size_t _pg_sz=0;
 
 
 
 void _free_node_list(void* p){
-	MemBlock* n=(MemBlock*)((uint8_t*)p-sizeof(MemBlock));
-	n->sz|=MEM_SET_BLOCK_FREE;
-	if (n->p&&MEM_GET_BLOCK_STATE(n->p->sz)){
-		n->p->sz+=n->sz+sizeof(MemBlock);
-		n->p->n=n->n;
-		if (n->n){
-			n->n->p=n->p;
-		}
-		n=n->p;
+	MemHeader* h=(MemHeader*)(void*)((uint64_t)p-sizeof(MemHeader));
+	if (MEM_HEADER_GET_PREV(h)&&MEM_HEADER_GET_FREE(MEM_HEADER_GET_PREV(h))){
+		MemHeader* ph=MEM_HEADER_GET_PREV(h);
+		ph->a=MEM_HEADER_SET_PREV(MEM_HEADER_GET_PREV(ph))|MEM_HEADER_COPY_NEXT(h);
+		ph->b=MEM_HEADER_SET_SIZE(MEM_HEADER_GET_SIZE(ph)+h->b+sizeof(MemHeader));
+		h=ph;
 	}
-	if (n->n&&MEM_GET_BLOCK_STATE(n->n->sz)){
-		n->sz+=n->n->sz+sizeof(MemBlock);
-		if (n->n->n){
-			n->n->n->p=n;
-		}
-		n->n=n->n->n;
+	if (MEM_HEADER_HAS_NEXT(h)&&MEM_HEADER_GET_FREE(MEM_HEADER_GET_NEXT(h))){
+		MemHeader* nh=MEM_HEADER_GET_NEXT(h);
+		h->a=MEM_HEADER_SET_PREV(MEM_HEADER_GET_PREV(h))|MEM_HEADER_COPY_NEXT(nh);
+		h->b=MEM_HEADER_SET_SIZE(h->b+MEM_HEADER_GET_SIZE(nh)+sizeof(MemHeader));
+	}
+	h->b|=MEM_HEADER_SET_FREE;
+	if (h<_lf){
+		_lf=h;
 	}
 }
 
 
 
-void* _realloc_node_list(void* p,uint64_t l){
-	uint64_t ol=l;
-	l*=sizeof(struct _BOARD_NODE);
-	if (p==NULL){
-		MemBlock* n=_mem_h;
-		while (!MEM_GET_BLOCK_STATE(n->sz)||MEM_GET_BLOCK_SIZE(n->sz)<l+sizeof(MemBlock)){
-			if (!(n->n)){
-				_ptr_ll++;
-				_ptr_l=realloc(_ptr_l,_ptr_ll*sizeof(uint64_t));
-				*(_ptr_l+_ptr_ll-1)=(uint64_t)VirtualAlloc((void*)(*_ptr_l+_pg_sz*(_ptr_ll-1)),_pg_sz,MEM_COMMIT|MEM_RESERVE|MEM_LARGE_PAGES,PAGE_READWRITE);
-				if (MEM_GET_BLOCK_STATE(n->sz)){
-					n->sz+=_pg_sz;
-				}
-				else{
-					MemBlock* nn=(MemBlock*)(*(_ptr_l+_ptr_ll-1));
-					nn->p=n;
-					nn->n=NULL;
-					nn->sz=(_pg_sz-sizeof(MemBlock))|MEM_SET_BLOCK_FREE;
-					n->n=nn;
-					n=nn;
-				}
-				break;
+void* _alloc_node_list(uint64_t l){
+	MemHeader* h=_lf;
+	while (!MEM_HEADER_GET_FREE(h)||MEM_HEADER_GET_SIZE(h)<l+sizeof(MemHeader)){
+		if (!MEM_HEADER_HAS_NEXT(h)){
+			_ptr_ll++;
+			_ptr_l=realloc(_ptr_l,_ptr_ll*sizeof(void*));
+			*(_ptr_l+_ptr_ll-1)=VirtualAlloc((void*)((uint64_t)*_ptr_l+_pg_sz*(_ptr_ll-1)),_pg_sz,MEM_COMMIT|MEM_RESERVE|MEM_LARGE_PAGES,PAGE_READWRITE);
+			if (MEM_HEADER_GET_FREE(h)){
+				h->b=MEM_HEADER_SET_SIZE(MEM_HEADER_GET_SIZE(h)+_pg_sz)|MEM_HEADER_SET_FREE;
 			}
-			n=n->n;
+			else{
+				MemHeader* nh=(MemHeader*)*(_ptr_l+_ptr_ll-1);
+				nh->a=MEM_HEADER_SET_PREV(h);
+				nh->b=MEM_HEADER_SET_SIZE(_pg_sz-sizeof(MemHeader))|MEM_HEADER_SET_FREE;
+				h->a|=MEM_HEADER_SET_NEXT;
+				h=nh;
+			}
+			continue;
 		}
-		MemBlock* nn=(MemBlock*)((uint8_t*)n+l+sizeof(MemBlock));
-		nn->p=n;
-		nn->n=n->n;
-		nn->sz=(MEM_GET_BLOCK_SIZE(n->sz)-l-sizeof(MemBlock))|MEM_SET_BLOCK_FREE;
-		if (n->n){
-			n->n->p=nn;
-		}
-		n->n=nn;
-		n->sz=l;
-		return ((uint8_t*)n+sizeof(MemBlock));
+		h=MEM_HEADER_GET_NEXT(h);
 	}
-	MemBlock* n=(MemBlock*)((uint8_t*)p-sizeof(MemBlock));
-	if (n->n&&MEM_GET_BLOCK_STATE(n->n->sz)&&MEM_GET_BLOCK_SIZE(n->n->sz)>=l-n->sz){
-		MemBlock* tmp_n=n->n->n;
-		uint64_t tmp_sz=MEM_GET_BLOCK_SIZE(n->n->sz);
-		MemBlock* nn=(MemBlock*)((uint8_t*)n+l+sizeof(MemBlock));
-		nn->p=n;
-		nn->n=tmp_n;
-		nn->sz=(tmp_sz-(l-n->sz))|MEM_SET_BLOCK_FREE;
-		if (nn->n){
-			nn->n->p=nn;
-		}
-		n->n=nn;
-		n->sz=l;
-		return p;
+	void* o=(void*)((uint64_t)(void*)h+sizeof(MemHeader));
+	MemHeader* nh=(MemHeader*)(void*)((uint64_t)(void*)h+l+sizeof(MemHeader));
+	nh->a=MEM_HEADER_SET_PREV(h)|MEM_HEADER_COPY_NEXT(h);
+	nh->b=MEM_HEADER_SET_SIZE(MEM_HEADER_GET_SIZE(h)-l-sizeof(MemHeader))|MEM_HEADER_SET_FREE;
+	h->a|=MEM_HEADER_SET_NEXT;
+	h->b=MEM_HEADER_SET_SIZE(l);
+	if (_lf==h){
+		_lf=nh;
 	}
-	uint64_t i=n->sz;
-	void* np=_realloc_node_list(NULL,ol);
-	while (i){
-		i--;
-		*((uint8_t*)np+i)=*((uint8_t*)p+i);
+	if (MEM_HEADER_HAS_NEXT(nh)){
+		MemHeader* nnh=MEM_HEADER_GET_NEXT(nh);
+		nnh->a=MEM_HEADER_SET_PREV(nh)|MEM_HEADER_COPY_NEXT(nnh);
 	}
-	_free_node_list(p);
-	return np;
+	return o;
 }
 
 
@@ -186,9 +167,8 @@ float _eval_board_piece(uint8_t p,uint8_t pp,uint8_t t){
 
 void _get_moves_cb(void* dt,Move m){
 	BoardNode n=(BoardNode)dt;
+	BoardNode nn=n->cn+n->cnl;
 	n->cnl++;
-	n->cn=_realloc_node_list(n->cn,n->cnl);
-	BoardNode nn=n->cn+n->cnl-1;
 	nn->v=0;
 	nn->f=n->f&1;
 	for (uint8_t i=0;i<64;i++){
@@ -220,9 +200,19 @@ float _minmax(BoardNode n,uint8_t d,float a,float b,uint8_t mx,uint8_t t){
 	}
 	if (n->cnl==UINT8_MAX){
 		n->cnl=0;
+		uint8_t j=0;
+		for (uint8_t i=0;i<64;i++){
+			if (CHESS_PIECE_EXISTS(n->b[i])&&CHESS_PIECE_GET_COLOR(n->b[i])==(mx?t:CHESS_FLIP_COLOR(t))){
+				j+=get_moves_c(n->b,i);
+			}
+		}
+		n->cn=_alloc_node_list(j*sizeof(struct _BOARD_NODE));
 		for (uint8_t i=0;i<64;i++){
 			if (CHESS_PIECE_EXISTS(n->b[i])&&CHESS_PIECE_GET_COLOR(n->b[i])==(mx?t:CHESS_FLIP_COLOR(t))){
 				get_moves(n->b,i,_get_moves_cb,n);
+				if (n->cnl==j){
+					break;
+				}
 			}
 		}
 	}
@@ -374,13 +364,13 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 			}
 		}
 		_ptr_ll=1;
-		_ptr_l=malloc(sizeof(uint64_t));
-		_pg_sz=GetLargePageMinimum()*PAGE_SIZE_MULT;
-		*_ptr_l=(uint64_t)VirtualAlloc(NULL,_pg_sz,MEM_COMMIT|MEM_RESERVE|MEM_LARGE_PAGES,PAGE_READWRITE);
-		_mem_h=(void*)*_ptr_l;
-		_mem_h->p=NULL;
-		_mem_h->n=NULL;
-		_mem_h->sz=(_pg_sz-sizeof(MemBlock))|MEM_SET_BLOCK_FREE;
+		_ptr_l=malloc(sizeof(void*));
+		_pg_sz=GetLargePageMinimum();
+		*_ptr_l=VirtualAlloc(NULL,_pg_sz,MEM_COMMIT|MEM_RESERVE|MEM_LARGE_PAGES,PAGE_READWRITE);
+		_mem_h=*_ptr_l;
+		_mem_h->a=MEM_HEADER_SET_PREV(NULL);
+		_mem_h->b=MEM_HEADER_SET_SIZE(_pg_sz-sizeof(MemHeader))|MEM_HEADER_SET_FREE;
+		_lf=_mem_h;
 	}
 	if (r==NULL){
 		r=malloc(sizeof(struct _BOARD_NODE));
