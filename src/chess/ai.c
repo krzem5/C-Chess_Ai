@@ -446,7 +446,7 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 				QueryPerformanceCounter(&te);
 				printf("%.1f (%llu node%c, %.6f seconds)\n",s,tn,(tn==1?' ':'s'),(te.QuadPart-ts.QuadPart)*1e6/tf.QuadPart*1e-6);
 #else
-				float s=_minmax(nn,MINMAX_DEPTH-1,-INFINITY,INFINITY,0,t);
+				float s=_minmax(r->cn+i,MINMAX_DEPTH-1,-INFINITY,INFINITY,0,t);
 #endif
 				if (s>cb_a.bs){
 					if (cb_a.bs!=-INFINITY){
