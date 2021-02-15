@@ -99,7 +99,7 @@ uint64_t _pg_sz=0;
 
 
 
-void _print_comma_num(uint64_t v){
+void _print_comma(uint64_t v){
 	const uint64_t pw[]={10ull,100ull,1000ull,10000ull,100000ull,1000000ull,10000000ull,100000000ull,1000000000ull,10000000000ull,100000000000ull,1000000000000ull,10000000000000ull,100000000000000ull,1000000000000000ull,10000000000000000ull,100000000000000000ull,1000000000000000000ull,10000000000000000000ull};
 	uint8_t sz=1;
 	while (pw[sz-1]<v+1){
@@ -296,13 +296,13 @@ BOOL _run_minmax(LPVOID dt){
 	}
 	else{
 		printf("%#.8lx => %.1f (n = ",GetCurrentThreadId(),s);
-		_print_comma_num(tn);
+		_print_comma(tn);
 		printf("; t = %.6f; mem = ",(te.QuadPart-ts.QuadPart)*1e6/tf.QuadPart*1e-6);
-		_print_comma_num(pl.tm);
+		_print_comma(pl.tm);
 		printf(" (mx: ");
-		_print_comma_num(pl.mx);
+		_print_comma(pl.mx);
 		printf("); n/s = ");
-		_print_comma_num((uint64_t)(tn/((te.QuadPart-ts.QuadPart)*1e6/tf.QuadPart*1e-6)));
+		_print_comma((uint64_t)(tn/((te.QuadPart-ts.QuadPart)*1e6/tf.QuadPart*1e-6)));
 		printf(")");
 		if (s>ta->a->bs){
 			printf(" -> TOP");
