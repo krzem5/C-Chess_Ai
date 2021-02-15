@@ -5,13 +5,18 @@
 #include <math.h>
 #include <signal.h>
 #include <windows.h>
+#undef NDEBUG
 
 
 
-#define MINMAX_DEPTH 5
-#define MAX_THR_MEM 0x4000000
+#define MINMAX_DEPTH 7
+#define MAX_THR_MEM 0x200000//0x8000
+#define NODE_GET_TURN(n) ((n)->f&1)
+#define NODE_GET_COMPLETE(n) ((n)->f&2)
+#define NODE_SET_TURN(t) (t)
+#define NODE_SET_COMPLETE 2
 #define GET_DEPTH(f) ((f)&63)
-#define GET_MAXIMIZING(f) (((f)>>6)&1)
+#define GET_MAXIMIZING(f) ((f)&0x40)
 #define GET_TURN(f) ((f)>>7)
 #define SET_DEPTH(d) (d)
 #define SET_MAXIMIZING 0x40
@@ -71,6 +76,10 @@ struct _CB_ARGS{
 struct _PAGE_LIST{
 	void* b;
 	uint64_t t;
+#ifndef NDEBUG
+	uint64_t tm;
+	uint64_t mx;
+#endif
 };
 
 
@@ -121,21 +130,24 @@ void _get_moves_cb(void* dt,Move m){
 	BoardNode* nn=n->cn+n->cnl;
 	n->cnl++;
 	nn->v=0;
-	nn->f=n->f&1;
+	nn->f=NODE_SET_TURN(NODE_GET_TURN(n));
 	for (uint8_t i=0;i<64;i++){
 		if (i==CHESS_MOVE_GET_POS0(m)){
 			nn->b[i]=CHESS_PIECE_UNKNOWN;
 		}
-		else if (CHESS_PIECE_EXISTS(nn->b[i]=n->b[(i==CHESS_MOVE_GET_POS1(m)?CHESS_MOVE_GET_POS0(m):i)])){
-			if (i==CHESS_MOVE_GET_POS1(m)&&CHESS_PIECE_GET_TYPE(n->b[i])==CHESS_PIECE_TYPE_KING){
-				nn->f|=2;
+		else if (i==CHESS_MOVE_GET_POS1(m)){
+			nn->b[i]=n->b[CHESS_MOVE_GET_POS0(m)];
+			if (CHESS_PIECE_GET_TYPE(nn->b[i])==CHESS_PIECE_TYPE_KING){
+				nn->f|=NODE_SET_COMPLETE;
 			}
-			nn->v+=_eval_board_piece(nn->b[i],i,n->f&1);
+			nn->v+=_eval_board_piece(nn->b[i],i,NODE_GET_TURN(n));
+		}
+		else if (CHESS_PIECE_EXISTS(nn->b[i]=n->b[i])){
+			nn->v+=_eval_board_piece(nn->b[i],i,NODE_GET_TURN(n));
 		}
 	}
 	nn->m=m;
-	nn->cnl=UINT8_MAX;
-	nn->cn=NULL;
+	nn->cnl=0;
 }
 
 
@@ -146,42 +158,34 @@ float _minmax(BoardNode* n,uint8_t f,float a,float b,PageList* pl,uint64_t* tn){
 #else
 float _minmax(BoardNode* n,uint8_t f,float a,float b,PageList* pl){
 #endif
-	if (!GET_DEPTH(f)||(n->f&2)){
+	if (!GET_DEPTH(f)||NODE_GET_COMPLETE(n)){
 		return n->v;
 	}
-	if (n->cnl==UINT8_MAX){
-		n->cnl=0;
-		uint8_t j=0;
-		for (uint8_t i=0;i<64;i++){
-			if (CHESS_PIECE_EXISTS(n->b[i])&&CHESS_PIECE_GET_COLOR(n->b[i])==(GET_MAXIMIZING(f)?GET_TURN(f):CHESS_FLIP_COLOR(GET_TURN(f)))){
-				j+=get_moves_c(n->b,i);
-			}
-		}
-		n->cn=(void*)((uint64_t)pl->b+pl->t);
-		pl->t+=(uint64_t)j*sizeof(BoardNode);
-		if (pl->t>MAX_THR_MEM){
-			printf("Not Enought Memory!\n");
-			raise(SIGABRT);
-		}
-		for (uint8_t i=0;i<64;i++){
-			if (CHESS_PIECE_EXISTS(n->b[i])&&CHESS_PIECE_GET_COLOR(n->b[i])==(GET_MAXIMIZING(f)?GET_TURN(f):CHESS_FLIP_COLOR(GET_TURN(f)))){
-				get_moves(n->b,i,_get_moves_cb,n);
-				if (n->cnl==j){
-					break;
-				}
-			}
+	uint64_t lt=pl->t;
+	n->cn=(void*)((uint64_t)pl->b+pl->t);
+	uint8_t cl=(GET_MAXIMIZING(f)?GET_TURN(f):CHESS_FLIP_COLOR(GET_TURN(f)));
+	for (uint8_t i=0;i<64;i++){
+		if (CHESS_PIECE_EXISTS(n->b[i])&&CHESS_PIECE_GET_COLOR(n->b[i])==cl){
+			get_moves(n->b,i,_get_moves_cb,n);
 		}
 	}
-	if (n->cnl==0){
-		return n->v;
+	pl->t+=(uint64_t)n->cnl*sizeof(BoardNode);
+#ifndef NDEBUG
+	pl->tm+=(uint64_t)n->cnl*sizeof(BoardNode);
+	pl->mx=(pl->t>pl->mx?pl->t:pl->mx);
+#endif
+	if (pl->t>MAX_THR_MEM){
+		printf("Not Enought Memory!\n");
+		raise(SIGABRT);
 	}
 	if (GET_MAXIMIZING(f)){
 		float o=-INFINITY;
+		uint8_t nf=DECREASE_DEPTH(f)|COPY_TURN(f);
 		for (uint8_t i=0;i<n->cnl;i++){
 #ifndef NDEBUG
-			float nv=_minmax(n->cn+i,DECREASE_DEPTH(f)|COPY_TURN(f),a,b,pl,tn);
+			float nv=_minmax(n->cn+i,nf,a,b,pl,tn);
 #else
-			float nv=_minmax(n->cn+i,DECREASE_DEPTH(f)|COPY_TURN(f),a,b,pl);
+			float nv=_minmax(n->cn+i,nf,a,b,pl);
 #endif
 			if (nv>o){
 				o=nv;
@@ -190,17 +194,20 @@ float _minmax(BoardNode* n,uint8_t f,float a,float b,PageList* pl){
 				a=o;
 			}
 			if (a>=b){
+				pl->t=lt;
 				return b;
 			}
 		}
+		pl->t=lt;
 		return o;
 	}
 	float o=INFINITY;
+	uint8_t nf=DECREASE_DEPTH(f)|SET_MAXIMIZING|COPY_TURN(f);
 	for (uint8_t i=0;i<n->cnl;i++){
 #ifndef NDEBUG
-		float nv=_minmax(n->cn+i,DECREASE_DEPTH(f)|SET_MAXIMIZING|COPY_TURN(f),a,b,pl,tn);
+		float nv=_minmax(n->cn+i,nf,a,b,pl,tn);
 #else
-		float nv=_minmax(n->cn+i,DECREASE_DEPTH(f)|SET_MAXIMIZING|COPY_TURN(f),a,b,pl);
+		float nv=_minmax(n->cn+i,nf,a,b,pl);
 #endif
 		if (nv<o){
 			o=nv;
@@ -209,22 +216,27 @@ float _minmax(BoardNode* n,uint8_t f,float a,float b,PageList* pl){
 			b=o;
 		}
 		if (b<=a){
+			pl->t=lt;
 			return a;
 		}
 	}
+	pl->t=lt;
 	return o;
 }
 
 
 
-BOOL _minmax_thr(LPVOID dt){
+BOOL _run_minmax(LPVOID dt){
 	ThreadArgs* ta=(ThreadArgs*)dt;
 	PageList pl={
 		ta->pg,
 		sizeof(BoardNode)+sizeof(ThreadArgs)
+#ifndef NDEBUG
+		,0,0
+#endif
 	};
 #ifndef NDEBUG
-	printf("Running minmax(depth = %hhu, move = {%hhu %hhu (%hhu), %hhu %hhu (%hhu)}) => Thread#%lu\n",MINMAX_DEPTH,CHESS_MOVE_GET_X0(ta->nn->m),CHESS_MOVE_GET_Y0(ta->nn->m),CHESS_PIECE_GET_TYPE(ta->a->b[CHESS_MOVE_GET_POS0(ta->nn->m)]),CHESS_MOVE_GET_X1(ta->nn->m),CHESS_MOVE_GET_Y1(ta->nn->m),CHESS_PIECE_GET_TYPE(ta->a->b[CHESS_MOVE_GET_POS1(ta->nn->m)]),GetCurrentThreadId());
+	printf("Running minmax(%c%c (%hhu), %c%c (%hhu)) => %#lx\n",CHESS_MOVE_GET_X0(ta->nn->m)+65,CHESS_MOVE_GET_Y0(ta->nn->m)+49,CHESS_PIECE_GET_TYPE(ta->a->b[CHESS_MOVE_GET_POS0(ta->nn->m)]),CHESS_MOVE_GET_X1(ta->nn->m)+65,CHESS_MOVE_GET_Y1(ta->nn->m)+49,CHESS_PIECE_GET_TYPE(ta->a->b[CHESS_MOVE_GET_POS1(ta->nn->m)]),GetCurrentThreadId());
 	LARGE_INTEGER tf;
 	LARGE_INTEGER ts;
 	LARGE_INTEGER te;
@@ -233,7 +245,7 @@ BOOL _minmax_thr(LPVOID dt){
 	QueryPerformanceCounter(&ts);
 	float s=_minmax(ta->nn,SET_DEPTH(MINMAX_DEPTH-1)|SET_TURN(ta->a->t),-INFINITY,INFINITY,&pl,&tn);
 	QueryPerformanceCounter(&te);
-	printf("Thread#%lu => %.1f (%llu node%c, %.6f seconds, %llu bytes)\n",GetCurrentThreadId(),s,tn,(tn==1?' ':'s'),(te.QuadPart-ts.QuadPart)*1e6/tf.QuadPart*1e-6,pl.t);
+	printf("%#lx => %.1f (%llun, %.6fs, %llub (max: %llub), %llun/s)\n",GetCurrentThreadId(),s,tn,(te.QuadPart-ts.QuadPart)*1e6/tf.QuadPart*1e-6,pl.tm,pl.mx,(uint64_t)(tn/((te.QuadPart-ts.QuadPart)*1e6/tf.QuadPart*1e-6)));
 #else
 	float s=_minmax(ta->nn,SET_DEPTH(MINMAX_DEPTH-1)|SET_TURN(ta->a->t),-INFINITY,INFINITY,&pl);
 #endif
@@ -253,7 +265,7 @@ BOOL _minmax_thr(LPVOID dt){
 
 
 
-void _run_minmax(void* dt,Move m){
+void _root_move_cb(void* dt,Move m){
 	CbArgs* a=(CbArgs*)dt;
 	void* pg=VirtualAlloc(a->pg,MAX_THR_MEM,MEM_COMMIT|MEM_RESERVE|MEM_LARGE_PAGES,PAGE_READWRITE);
 	a->pg=(void*)((uint64_t)pg+MAX_THR_MEM);
@@ -272,8 +284,7 @@ void _run_minmax(void* dt,Move m){
 		}
 	}
 	nn->m=m;
-	nn->cnl=UINT8_MAX;
-	nn->cn=NULL;
+	nn->cnl=0;
 	ThreadArgs* ta=(ThreadArgs*)(void*)((uint64_t)pg+sizeof(BoardNode));
 	ta->nn=nn;
 	ta->a=a;
@@ -281,7 +292,8 @@ void _run_minmax(void* dt,Move m){
 	a->tll++;
 	a->tl=realloc(a->tl,a->tll*sizeof(HANDLE));
 	DWORD tmp;
-	*(a->tl+a->tll-1)=CreateThread(NULL,0,_minmax_thr,ta,0,&tmp);
+	*(a->tl+a->tll-1)=CreateThread(NULL,0,_run_minmax,ta,0,&tmp);
+	SetThreadPriority(*(a->tl+a->tll-1),THREAD_PRIORITY_HIGHEST);
 	if (!a->pl){
 		a->pl=_pl;
 	}
@@ -325,7 +337,8 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 			}
 		}
 		if (MAX_THR_MEM<GetLargePageMinimum()){
-			printf("MAX_THR_MEM Too Small!\n");
+			printf("MAX_THR_MEM Too Small! (Must be at Least %#llxb)\n",GetLargePageMinimum());
+			return 1;
 		}
 		DWORD_PTR tmp;
 		GetProcessAffinityMask(GetCurrentProcess(),&tmp,&_pl);
@@ -343,7 +356,7 @@ uint8_t default_ai_move(ChessBoard b,Move lm,Move* o){
 	};
 	for (uint8_t i=0;i<64;i++){
 		if (CHESS_PIECE_EXISTS(b->b[i])&&CHESS_PIECE_GET_COLOR(b->b[i])==t){
-			get_moves(b->b,i,_run_minmax,&cb_a);
+			get_moves(b->b,i,_root_move_cb,&cb_a);
 		}
 	}
 	WaitForMultipleObjects(cb_a.tll,cb_a.tl,TRUE,INFINITE);

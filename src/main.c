@@ -3,14 +3,6 @@
 #include <windows.h>
 #include <stdio.h>
 
-struct _BOARD_NODE{
-	ChessPiece b[64];
-	struct _BOARD_NODE* cn;
-	float v;
-	Move m;
-	uint8_t f;
-	uint8_t cnl;
-};
 
 
 int main(int argc,const char** argv){

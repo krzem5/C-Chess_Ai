@@ -108,10 +108,6 @@ void get_moves(ChessPiece* b,uint8_t p,get_moves_cb_t cb,void* cb_a);
 
 
 
-uint8_t get_moves_c(ChessPiece* b,uint8_t p);
-
-
-
 uint8_t default_player_move(ChessBoard b,Move lm,Move* o);
 
 
