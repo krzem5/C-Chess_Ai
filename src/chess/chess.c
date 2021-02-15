@@ -233,7 +233,7 @@ void get_moves(ChessPiece* b,uint8_t p,get_moves_cb_t cb,void* cb_a){
 					if (x){
 						ChessPiece t=b[CHESS_BOARD_POS(x-1,y+1)];
 						if (CHESS_PIECE_EXISTS(t)&&CHESS_PIECE_GET_COLOR(t)!=cl){
-							cb(cb_a,CHESS_MOVE_SET3(p,x+1,y+1));
+							cb(cb_a,CHESS_MOVE_SET3(p,x-1,y+1));
 						}
 					}
 					if (x<7){
