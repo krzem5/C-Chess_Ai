@@ -229,13 +229,13 @@ float _minmax(BoardNode* n,uint8_t f,float a,float b,PageList* pl){
 #endif
 			if (nv>o){
 				o=nv;
-			}
-			if (o>a){
-				a=o;
-			}
-			if (a>=b){
-				pl->t=lt;
-				return b;
+				if (o>a){
+					a=o;
+					if (a>=b){
+						pl->t=lt;
+						return b;
+					}
+				}
 			}
 		}
 		pl->t=lt;
@@ -251,13 +251,13 @@ float _minmax(BoardNode* n,uint8_t f,float a,float b,PageList* pl){
 #endif
 		if (nv<o){
 			o=nv;
-		}
-		if (o<b){
-			b=o;
-		}
-		if (b<=a){
-			pl->t=lt;
-			return a;
+			if (o<b){
+				b=o;
+				if (b<=a){
+					pl->t=lt;
+					return a;
+				}
+			}
 		}
 	}
 	pl->t=lt;
