@@ -3,6 +3,13 @@ queries:
   - exclude: cpp/short-global-name
   - exclude: py/redundant-global-declaration
 extraction:
+  cpp:
+    packages:
+      - python3.8
+    index:
+      build_command:
+        - python3.8 build.py
+      vstools_version: 16
   python:
     python_setup:
       version: 3
