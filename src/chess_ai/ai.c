@@ -282,7 +282,7 @@ BOOL _run_minmax(LPVOID dt){
 		printf("Unknown WaitForSingleObject Value!\n");
 	}
 	else{
-		printf("Checking Move %c%c -> %c%c (%hhu -> %hhu) => %#.8lx\n",CHESS_MOVE_GET_X0(ta->m)+65,CHESS_MOVE_GET_Y0(ta->m)+49,CHESS_MOVE_GET_X1(ta->m)+65,CHESS_MOVE_GET_Y1(ta->m)+49,CHESS_PIECE_GET_TYPE(ta->a->b[CHESS_MOVE_GET_POS0(ta->m)]),CHESS_PIECE_GET_TYPE(ta->a->b[CHESS_MOVE_GET_POS1(ta->m)]),GetCurrentThreadId());
+		printf("Checking Move %c%c -> %c%c (%hu -> %hu) => %#.8lx\n",CHESS_MOVE_GET_X0(ta->m)+65,CHESS_MOVE_GET_Y0(ta->m)+49,CHESS_MOVE_GET_X1(ta->m)+65,CHESS_MOVE_GET_Y1(ta->m)+49,CHESS_PIECE_GET_TYPE(ta->a->b[CHESS_MOVE_GET_POS0(ta->m)]),CHESS_PIECE_GET_TYPE(ta->a->b[CHESS_MOVE_GET_POS1(ta->m)]),GetCurrentThreadId());
 		ReleaseMutex(ta->a->mx);
 	}
 	LARGE_INTEGER tf;
@@ -364,7 +364,7 @@ void _root_move_cb(void* dt,Move m){
 	a->tll++;
 	a->tl=realloc(a->tl,a->tll*sizeof(HANDLE));
 	DWORD tmp;
-	*(a->tl+a->tll-1)=CreateThread(NULL,0,_run_minmax,ta,0,&tmp);
+	*(a->tl+a->tll-1)=CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)_run_minmax,ta,0,&tmp);
 	SetThreadPriority(*(a->tl+a->tll-1),THREAD_PRIORITY_ABOVE_NORMAL);
 }
 
