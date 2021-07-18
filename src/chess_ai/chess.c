@@ -444,31 +444,6 @@ uint8_t default_player_move(ChessBoard b,Move lm,Move* o){
 					printf("\x1b[48;2;40;40;40m");
 				}
 			}
-			else if (i==5){
-				uint64_t l=(CHESS_BOARD_GET_TURN(b->f)==CHESS_PIECE_COLOR_WHITE?b->wd:b->bd);
-				uint8_t c=CHESS_PIECE_LIST_GET_LENGTH(l);
-				if (c>8){
-					printf("\x1b[49m");
-					for (uint8_t i=8;i<c;i++){
-						uint8_t e=CHESS_PIECE_LIST_GET_ELEM(l,i);
-						if (CHESS_BOARD_GET_TURN(b->f)==CHESS_PIECE_COLOR_WHITE){
-							printf("\x1b[38;2;105;105;105m");
-						}
-						else{
-							printf("\x1b[38;2;169;169;169m");
-						}
-						putchar(pl0[CHESS_PIECE_LIST_ELEM_GET_TYPE(e)]);
-						if (pl1[CHESS_PIECE_LIST_ELEM_GET_TYPE(e)]!=' '){
-							putchar(pl1[CHESS_PIECE_LIST_ELEM_GET_TYPE(e)]);
-						}
-						if (CHESS_PIECE_LIST_ELEM_GET_X(e)!=UINT8_MAX){
-							printf("\x1b[38;2;29;68;225m%c",CHESS_PIECE_LIST_ELEM_GET_X(e)+65);
-						}
-						putchar(' ');
-					}
-					printf("\x1b[48;2;40;40;40m");
-				}
-			}
 			else if (i==6){
 				uint64_t l=(CHESS_BOARD_GET_TURN(b->f)==CHESS_PIECE_COLOR_WHITE?b->wd:b->bd);
 				uint8_t c=CHESS_PIECE_LIST_GET_LENGTH(l);
